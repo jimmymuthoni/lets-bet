@@ -2,18 +2,24 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
 	"os/signal"
 	"syscall"
 	"time"
 )
 
-// RunHTTP starts an HTTP server on the given address with the given handler,
-// and blocks until an OS signal triggers a graceful shutdown.
+// RunHTTP starts an HTTP server on the given address with the given handler
+// and blocks until the context is cancelled or an OS signal (SIGINT/SIGTERM)
+// is received, then performs a graceful shutdown with a 15s drain window.
 func RunHTTP(ctx context.Context, addr string, handler http.Handler, logger *slog.Logger) error {
+	// Derive a context that is cancelled on SIGINT/SIGTERM. This is the idiomatic
+	// Go 1.16+ replacement for manual signal.Notify + channel plumbing.
+	ctx, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
 	srv := &http.Server{
 		Addr:              addr,
 		Handler:           handler,
@@ -23,14 +29,11 @@ func RunHTTP(ctx context.Context, addr string, handler http.Handler, logger *slo
 		IdleTimeout:       90 * time.Second,
 	}
 
-	// Listen for shutdown signals
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
-
+	// Buffered so the goroutine never blocks on send if the caller returns early.
 	errCh := make(chan error, 1)
 	go func() {
 		logger.Info("http server listening", "addr", addr)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}
 		close(errCh)
@@ -38,9 +41,7 @@ func RunHTTP(ctx context.Context, addr string, handler http.Handler, logger *slo
 
 	select {
 	case <-ctx.Done():
-		logger.Info("context cancelled, shutting down")
-	case sig := <-sigCh:
-		logger.Info("signal received, shutting down", "signal", sig.String())
+		logger.Info("shutdown requested", "cause", context.Cause(ctx))
 	case err, ok := <-errCh:
 		if ok && err != nil {
 			return fmt.Errorf("server error: %w", err)
