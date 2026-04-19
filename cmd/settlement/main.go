@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/betting-platform/internal/settlement"
+	settlementhttp "github.com/betting-platform/internal/infrastructure/http"
 	"github.com/gorilla/mux"
 )
 
@@ -20,7 +20,7 @@ func main() {
 	r := mux.NewRouter()
 
 	// Initialize handlers
-	handler := settlement.NewHandler()
+	handler := settlementhttp.NewSettlementHandler()
 
 	// Register routes
 	handler.RegisterRoutes(r)
