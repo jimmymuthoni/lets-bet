@@ -12,17 +12,20 @@ import (
 
 // Config holds database connection configuration
 type Config struct {
-	Host     string
-	Port     string
-	User     string
-	Password string
-	DBName   string
-	SSLMode  string
+	Host            string
+	Port            int
+	User            string
+	Password        string
+	DBName          string
+	SSLMode         string
+	MaxOpenConns    int
+	MaxIdleConns    int
+	ConnMaxLifetime time.Duration
 }
 
 // NewPostgresConnection creates a new PostgreSQL connection
 func NewPostgresConnection(cfg Config) (*sql.DB, error) {
-	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
 		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.DBName, cfg.SSLMode)
 
 	db, err := sql.Open("postgres", dsn)
@@ -30,10 +33,22 @@ func NewPostgresConnection(cfg Config) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	// Configure connection pool
-	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(25)
-	db.SetConnMaxLifetime(5 * time.Minute)
+	// Configure connection pool with sensible defaults
+	maxOpen := cfg.MaxOpenConns
+	if maxOpen <= 0 {
+		maxOpen = 25
+	}
+	maxIdle := cfg.MaxIdleConns
+	if maxIdle <= 0 {
+		maxIdle = 5
+	}
+	lifetime := cfg.ConnMaxLifetime
+	if lifetime <= 0 {
+		lifetime = 5 * time.Minute
+	}
+	db.SetMaxOpenConns(maxOpen)
+	db.SetMaxIdleConns(maxIdle)
+	db.SetConnMaxLifetime(lifetime)
 
 	// Test connection
 	if err := db.Ping(); err != nil {
@@ -51,7 +66,7 @@ type NullDecimal struct {
 }
 
 // Scan implements the sql.Scanner interface
-func (nd *NullDecimal) Scan(value interface{}) error {
+func (nd *NullDecimal) Scan(value any) error {
 	if value == nil {
 		nd.Valid = false
 		return nil
@@ -80,7 +95,7 @@ func (nd *NullDecimal) Scan(value interface{}) error {
 }
 
 // Value implements the driver.Valuer interface
-func (nd NullDecimal) Value() (interface{}, error) {
+func (nd NullDecimal) Value() (any, error) {
 	if !nd.Valid {
 		return nil, nil
 	}
@@ -99,7 +114,7 @@ func NewNullDecimal(d decimal.Decimal) NullDecimal {
 func GetDefaultConfig() Config {
 	return Config{
 		Host:     "localhost",
-		Port:     "5432",
+		Port:     5432,
 		User:     "betting_user",
 		Password: "betting_password",
 		DBName:   "betting_platform",
