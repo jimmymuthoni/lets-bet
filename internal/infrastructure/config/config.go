@@ -69,16 +69,17 @@ type NATSConfig struct {
 }
 
 type TenantConfig struct {
-	CountryCode string // KE, NG, GH
-	Currency    string // KES, NGN, GHS
-	Timezone    string
+	CountryCode      string // primary launch country: KE, NG, GH
+	Currency         string // KES, NGN, GHS
+	Timezone         string
+	AllowedCountries []string // ISO codes allowed by the geolocation fence (empty = allow all)
 }
 
 type JWTConfig struct {
-	Secret        string
-	Issuer        string
-	ExpiryHours   int
-	RefreshHours  int
+	Secret       string
+	Issuer       string
+	ExpiryHours  int
+	RefreshHours int
 }
 
 type SecurityConfig struct {
@@ -132,8 +133,8 @@ type CrashConfig struct {
 }
 
 type BetConfig struct {
-	MinStake          float64
-	MaxStake          float64
+	MinStake           float64
+	MaxStake           float64
 	MaxSelectionsMulti int
 }
 
@@ -143,13 +144,13 @@ type LoggingConfig struct {
 }
 
 type FeatureFlags struct {
-	LiveBetting    bool
-	CrashGames     bool
-	VirtualSports  bool
-	Casino         bool
-	DebugMode      bool
-	EnableSwagger  bool
-	EnablePprof    bool
+	LiveBetting   bool
+	CrashGames    bool
+	VirtualSports bool
+	Casino        bool
+	DebugMode     bool
+	EnableSwagger bool
+	EnablePprof   bool
 }
 
 // Load reads configuration from environment variables.
@@ -182,9 +183,10 @@ func Load(serviceName string) (*Config, error) {
 			URL: getString("NATS_URL", "nats://localhost:4222"),
 		},
 		Tenant: TenantConfig{
-			CountryCode: getString("COUNTRY_CODE", "KE"),
-			Currency:    getString("CURRENCY", "KES"),
-			Timezone:    getString("TIMEZONE", "Africa/Nairobi"),
+			CountryCode:      getString("COUNTRY_CODE", "KE"),
+			Currency:         getString("CURRENCY", "KES"),
+			Timezone:         getString("TIMEZONE", "Africa/Nairobi"),
+			AllowedCountries: getStringSlice("ALLOWED_COUNTRIES", nil),
 		},
 		JWT: JWTConfig{
 			Secret:       getString("JWT_SECRET", "change-me-in-production"),
