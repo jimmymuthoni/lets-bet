@@ -29,17 +29,17 @@ func (c *OddsCache) CacheMatchOdds(ctx context.Context, match *domain.Match) err
 // GetMatchOdds retrieves match odds from cache
 func (c *OddsCache) GetMatchOdds(ctx context.Context, matchID string) (*domain.Match, error) {
 	key := fmt.Sprintf("match_odds:%s", matchID)
-	
+
 	data, err := c.redis.Get(ctx, key)
 	if err != nil {
 		return nil, fmt.Errorf("match odds not found in cache: %w", err)
 	}
-	
+
 	var match domain.Match
-	if err := json.Unmarshal([]byte(fmt.Sprintf("%v", data)), &match); err != nil {
+	if err := json.Unmarshal(fmt.Appendf(nil, "%v", data), &match); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal match odds: %w", err)
 	}
-	
+
 	return &match, nil
 }
 
@@ -52,17 +52,17 @@ func (c *OddsCache) CacheLiveMatches(ctx context.Context, matches []*domain.Matc
 // GetLiveMatches retrieves live matches from cache
 func (c *OddsCache) GetLiveMatches(ctx context.Context) ([]*domain.Match, error) {
 	key := "live_matches"
-	
+
 	data, err := c.redis.Get(ctx, key)
 	if err != nil {
 		return nil, fmt.Errorf("live matches not found in cache: %w", err)
 	}
-	
+
 	var matches []*domain.Match
-	if err := json.Unmarshal([]byte(fmt.Sprintf("%v", data)), &matches); err != nil {
+	if err := json.Unmarshal(fmt.Appendf(nil, "%v", data), &matches); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal live matches: %w", err)
 	}
-	
+
 	return matches, nil
 }
 
@@ -75,17 +75,17 @@ func (c *OddsCache) CacheCalculatedOdds(ctx context.Context, betID uuid.UUID, re
 // GetCalculatedOdds retrieves calculated odds from cache
 func (c *OddsCache) GetCalculatedOdds(ctx context.Context, betID uuid.UUID) (*odds.BetOddsResult, error) {
 	key := fmt.Sprintf("calculated_odds:%s", betID.String())
-	
+
 	data, err := c.redis.Get(ctx, key)
 	if err != nil {
 		return nil, fmt.Errorf("calculated odds not found in cache: %w", err)
 	}
-	
+
 	var result odds.BetOddsResult
-	if err := json.Unmarshal([]byte(fmt.Sprintf("%v", data)), &result); err != nil {
+	if err := json.Unmarshal(fmt.Appendf(nil, "%v", data), &result); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal calculated odds: %w", err)
 	}
-	
+
 	return &result, nil
 }
 
