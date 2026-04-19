@@ -7,9 +7,31 @@ import (
 	"time"
 
 	"github.com/betting-platform/internal/core/domain"
+	"github.com/betting-platform/internal/core/usecase/wallet"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 )
+
+// insertBetSQL is shared between Create and InsertTx so we never diverge.
+const insertBetSQL = `
+	INSERT INTO bets (
+		id, user_id, country_code, bet_type, stake, currency,
+		potential_win, total_odds, status, actual_win,
+		settled_at, placed_at, ip_address, device_id,
+		tax_amount, tax_paid
+	) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`
+
+// InsertTx persists a bet inside an existing transaction (for atomic
+// placement alongside the wallet debit).
+func (r *BetRepository) InsertTx(ctx context.Context, tx wallet.DBTX, bet *domain.Bet) error {
+	_, err := tx.ExecContext(ctx, insertBetSQL,
+		bet.ID, bet.UserID, bet.CountryCode, bet.BetType, bet.Stake, bet.Currency,
+		bet.PotentialWin, bet.TotalOdds, bet.Status, bet.ActualWin,
+		bet.SettledAt, bet.PlacedAt, bet.IPAddress, bet.DeviceID,
+		bet.TaxAmount, bet.TaxPaid,
+	)
+	return err
+}
 
 // BetRepository implements bet repository using PostgreSQL
 type BetRepository struct {
