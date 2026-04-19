@@ -51,7 +51,7 @@ type verifyIDRequest struct {
 func (h *KYCHandler) verifyUser(w http.ResponseWriter, r *http.Request) {
 	logger := logging.FromContext(r.Context())
 	var req verifyUserRequest
-	if err := validation.DecodeJSON(r, &req); err != nil {
+	if err := validation.DecodeJSON(w, r, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
@@ -96,7 +96,7 @@ func (h *KYCHandler) verifyUser(w http.ResponseWriter, r *http.Request) {
 func (h *KYCHandler) verifyID(w http.ResponseWriter, r *http.Request) {
 	logger := logging.FromContext(r.Context())
 	var req verifyIDRequest
-	if err := validation.DecodeJSON(r, &req); err != nil {
+	if err := validation.DecodeJSON(w, r, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}

@@ -49,7 +49,7 @@ func (h *Handler) RegisterRoutes(r *mux.Router) {
 }
 
 func (h *Handler) liveness(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"status":  "ok",
 		"service": h.service,
 		"version": h.version,
@@ -66,6 +66,7 @@ func (h *Handler) readiness(w http.ResponseWriter, r *http.Request) {
 	h.mu.RUnlock()
 
 	results := make(map[string]string, len(checkers))
+
 	overall := http.StatusOK
 
 	for _, c := range checkers {
@@ -81,7 +82,7 @@ func (h *Handler) readiness(w http.ResponseWriter, r *http.Request) {
 	if overall != http.StatusOK {
 		status = "not_ready"
 	}
-	writeJSON(w, overall, map[string]interface{}{
+	writeJSON(w, overall, map[string]any{
 		"status":  status,
 		"service": h.service,
 		"version": h.version,
@@ -115,7 +116,7 @@ func (r *RedisChecker) Check(ctx context.Context) error {
 	return r.Client.Ping(ctx).Err()
 }
 
-func writeJSON(w http.ResponseWriter, status int, body interface{}) {
+func writeJSON(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(body)
