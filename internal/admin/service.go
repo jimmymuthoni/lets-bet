@@ -7,8 +7,6 @@ import (
 	"time"
 
 	"github.com/shopspring/decimal"
-
-	"github.com/betting-platform/internal/core/domain"
 )
 
 // AdminService provides administrative operations for the betting platform
@@ -30,27 +28,27 @@ func NewAdminService(eventBus EventBus) *AdminService {
 
 // DashboardData represents the main dashboard overview
 type DashboardData struct {
-	Overview        OverviewStats       `json:"overview"`
-	RecentActivity  []ActivityItem     `json:"recent_activity"`
-	TopUsers        []UserStats        `json:"top_users"`
-	RevenueMetrics  RevenueMetrics     `json:"revenue_metrics"`
-	BettingMetrics  BettingMetrics     `json:"betting_metrics"`
-	FinancialStats  FinancialStats     `json:"financial_stats"`
-	SystemHealth    SystemHealth       `json:"system_health"`
+	Overview       OverviewStats  `json:"overview"`
+	RecentActivity []ActivityItem `json:"recent_activity"`
+	TopUsers       []UserStats    `json:"top_users"`
+	RevenueMetrics RevenueMetrics `json:"revenue_metrics"`
+	BettingMetrics BettingMetrics `json:"betting_metrics"`
+	FinancialStats FinancialStats `json:"financial_stats"`
+	SystemHealth   SystemHealth   `json:"system_health"`
 }
 
 // OverviewStats represents high-level platform statistics
 type OverviewStats struct {
-	TotalUsers           int64             `json:"total_users"`
-	ActiveUsers          int64             `json:"active_users"`
-	TotalBets            int64             `json:"total_bets"`
-	TotalVolume          decimal.Decimal   `json:"total_volume"`
-	TotalRevenue         decimal.Decimal   `json:"total_revenue"`
-	TotalPayouts         decimal.Decimal   `json:"total_payouts"`
-	ActiveMatches        int64             `json:"active_matches"`
-	PendingTransactions  int64             `json:"pending_transactions"`
-	SystemUptime         string            `json:"system_uptime"`
-	LastUpdated          time.Time         `json:"last_updated"`
+	TotalUsers          int64           `json:"total_users"`
+	ActiveUsers         int64           `json:"active_users"`
+	TotalBets           int64           `json:"total_bets"`
+	TotalVolume         decimal.Decimal `json:"total_volume"`
+	TotalRevenue        decimal.Decimal `json:"total_revenue"`
+	TotalPayouts        decimal.Decimal `json:"total_payouts"`
+	ActiveMatches       int64           `json:"active_matches"`
+	PendingTransactions int64           `json:"pending_transactions"`
+	SystemUptime        string          `json:"system_uptime"`
+	LastUpdated         time.Time       `json:"last_updated"`
 }
 
 // ActivityItem represents a recent system activity
@@ -82,63 +80,63 @@ type UserStats struct {
 
 // RevenueMetrics represents revenue analytics
 type RevenueMetrics struct {
-	TodayRevenue     decimal.Decimal     `json:"today_revenue"`
-	WeekRevenue      decimal.Decimal     `json:"week_revenue"`
-	MonthRevenue     decimal.Decimal     `json:"month_revenue"`
-	YearRevenue      decimal.Decimal     `json:"year_revenue"`
-	RevenueByPeriod  []RevenuePeriod    `json:"revenue_by_period"`
-	RevenueBySport   []RevenueBySport   `json:"revenue_by_sport"`
-	RevenueBySource  []RevenueBySource  `json:"revenue_by_source"`
+	TodayRevenue    decimal.Decimal   `json:"today_revenue"`
+	WeekRevenue     decimal.Decimal   `json:"week_revenue"`
+	MonthRevenue    decimal.Decimal   `json:"month_revenue"`
+	YearRevenue     decimal.Decimal   `json:"year_revenue"`
+	RevenueByPeriod []RevenuePeriod   `json:"revenue_by_period"`
+	RevenueBySport  []RevenueBySport  `json:"revenue_by_sport"`
+	RevenueBySource []RevenueBySource `json:"revenue_by_source"`
 }
 
 // RevenuePeriod represents revenue over a time period
 type RevenuePeriod struct {
-	Period   string          `json:"period"`
-	Revenue  decimal.Decimal `json:"revenue"`
-	Bets     int64           `json:"bets"`
-	Users    int64           `json:"users"`
+	Period  string          `json:"period"`
+	Revenue decimal.Decimal `json:"revenue"`
+	Bets    int64           `json:"bets"`
+	Users   int64           `json:"users"`
 }
 
 // RevenueBySport represents revenue breakdown by sport
 type RevenueBySport struct {
-	Sport    string          `json:"sport"`
-	Revenue  decimal.Decimal `json:"revenue"`
-	Bets     int64           `json:"bets"`
-	Users    int64           `json:"users"`
-	Growth   decimal.Decimal `json:"growth"`
+	Sport   string          `json:"sport"`
+	Revenue decimal.Decimal `json:"revenue"`
+	Bets    int64           `json:"bets"`
+	Users   int64           `json:"users"`
+	Growth  decimal.Decimal `json:"growth"`
 }
 
 // RevenueBySource represents revenue breakdown by source
 type RevenueBySource struct {
-	Source   string          `json:"source"`
-	Revenue  decimal.Decimal `json:"revenue"`
-	Count    int64           `json:"count"`
-	Percent  decimal.Decimal `json:"percent"`
+	Source  string          `json:"source"`
+	Revenue decimal.Decimal `json:"revenue"`
+	Count   int64           `json:"count"`
+	Percent decimal.Decimal `json:"percent"`
 }
 
 // BettingMetrics represents betting analytics
 type BettingMetrics struct {
-	TotalBets         int64             `json:"total_bets"`
-	WinningBets       int64             `json:"winning_bets"`
-	LosingBets        int64             `json:"losing_bets"`
-	VoidBets          int64             `json:"void_bets"`
-	TotalVolume       decimal.Decimal   `json:"total_volume"`
-	AverageBetSize    decimal.Decimal   `json:"average_bet_size"`
-	LargestBet        decimal.Decimal   `json:"largest_bet"`
-	SmallestBet       decimal.Decimal   `json:"smallest_bet"`
-	WinRate           decimal.Decimal   `json:"win_rate"`
-	HoldPercentage    decimal.Decimal   `json:"hold_percentage"`
-	BetsBySport       []BetsBySport     `json:"bets_by_sport"`
-	BetsByHour        []BetsByHour      `json:"bets_by_hour"`
+	TotalBets      int64           `json:"total_bets"`
+	WinningBets    int64           `json:"winning_bets"`
+	LosingBets     int64           `json:"losing_bets"`
+	VoidBets       int64           `json:"void_bets"`
+	TotalVolume    decimal.Decimal `json:"total_volume"`
+	AverageBetSize decimal.Decimal `json:"average_bet_size"`
+	LargestBet     decimal.Decimal `json:"largest_bet"`
+	SmallestBet    decimal.Decimal `json:"smallest_bet"`
+	WinRate        decimal.Decimal `json:"win_rate"`
+	HoldPercentage decimal.Decimal `json:"hold_percentage"`
+	BetsBySport    []BetsBySport   `json:"bets_by_sport"`
+	BetsByHour     []BetsByHour    `json:"bets_by_hour"`
 }
 
 // BetsBySport represents betting metrics by sport
 type BetsBySport struct {
-	Sport       string          `json:"sport"`
-	Bets        int64           `json:"bets"`
-	Volume      decimal.Decimal `json:"volume"`
-	Revenue     decimal.Decimal `json:"revenue"`
-	WinRate     decimal.Decimal `json:"win_rate"`
+	Sport   string          `json:"sport"`
+	Bets    int64           `json:"bets"`
+	Volume  decimal.Decimal `json:"volume"`
+	Revenue decimal.Decimal `json:"revenue"`
+	WinRate decimal.Decimal `json:"win_rate"`
 }
 
 // BetsByHour represents betting metrics by hour
@@ -150,12 +148,12 @@ type BetsByHour struct {
 
 // FinancialStats represents financial statistics
 type FinancialStats struct {
-	TotalDeposits      decimal.Decimal `json:"total_deposits"`
-	TotalWithdrawals   decimal.Decimal `json:"total_withdrawals"`
-	TotalBalance       decimal.Decimal `json:"total_balance"`
-	PendingDeposits    int64           `json:"pending_deposits"`
-	PendingWithdrawals int64           `json:"pending_withdrawals"`
-	WalletBalances     []WalletBalance `json:"wallet_balances"`
+	TotalDeposits      decimal.Decimal    `json:"total_deposits"`
+	TotalWithdrawals   decimal.Decimal    `json:"total_withdrawals"`
+	TotalBalance       decimal.Decimal    `json:"total_balance"`
+	PendingDeposits    int64              `json:"pending_deposits"`
+	PendingWithdrawals int64              `json:"pending_withdrawals"`
+	WalletBalances     []WalletBalance    `json:"wallet_balances"`
 	TransactionStats   []TransactionStats `json:"transaction_stats"`
 }
 
@@ -169,40 +167,40 @@ type WalletBalance struct {
 
 // TransactionStats represents transaction statistics
 type TransactionStats struct {
-	Type     string          `json:"type"`
-	Count    int64           `json:"count"`
-	Amount   decimal.Decimal `json:"amount"`
-	Average  decimal.Decimal `json:"average"`
+	Type    string          `json:"type"`
+	Count   int64           `json:"count"`
+	Amount  decimal.Decimal `json:"amount"`
+	Average decimal.Decimal `json:"average"`
 }
 
 // SystemHealth represents system health metrics
 type SystemHealth struct {
-	DatabaseStatus    string          `json:"database_status"`
-	EventBusStatus    string          `json:"event_bus_status"`
-	PaymentGateways   []GatewayStatus `json:"payment_gateways"`
-	OddsProviders     []ProviderStatus `json:"odds_providers"`
-	ResponseTime      time.Duration   `json:"response_time"`
-	ErrorRate         decimal.Decimal `json:"error_rate"`
-	CPUUsage          decimal.Decimal `json:"cpu_usage"`
-	MemoryUsage       decimal.Decimal `json:"memory_usage"`
-	DiskUsage         decimal.Decimal `json:"disk_usage"`
-	LastHealthCheck   time.Time       `json:"last_health_check"`
+	DatabaseStatus  string           `json:"database_status"`
+	EventBusStatus  string           `json:"event_bus_status"`
+	PaymentGateways []GatewayStatus  `json:"payment_gateways"`
+	OddsProviders   []ProviderStatus `json:"odds_providers"`
+	ResponseTime    time.Duration    `json:"response_time"`
+	ErrorRate       decimal.Decimal  `json:"error_rate"`
+	CPUUsage        decimal.Decimal  `json:"cpu_usage"`
+	MemoryUsage     decimal.Decimal  `json:"memory_usage"`
+	DiskUsage       decimal.Decimal  `json:"disk_usage"`
+	LastHealthCheck time.Time        `json:"last_health_check"`
 }
 
 // GatewayStatus represents payment gateway status
 type GatewayStatus struct {
-	Name      string          `json:"name"`
-	Status    string          `json:"status"`
-	LastCheck time.Time       `json:"last_check"`
-	Latency   time.Duration   `json:"latency"`
+	Name      string        `json:"name"`
+	Status    string        `json:"status"`
+	LastCheck time.Time     `json:"last_check"`
+	Latency   time.Duration `json:"latency"`
 }
 
 // ProviderStatus represents odds provider status
 type ProviderStatus struct {
-	Name      string          `json:"name"`
-	Status    string          `json:"status"`
-	LastCheck time.Time       `json:"last_check"`
-	Latency   time.Duration   `json:"latency"`
+	Name      string        `json:"name"`
+	Status    string        `json:"status"`
+	LastCheck time.Time     `json:"last_check"`
+	Latency   time.Duration `json:"latency"`
 }
 
 // GetDashboardData retrieves comprehensive dashboard data
@@ -228,6 +226,7 @@ func (s *AdminService) GetDashboardData(ctx context.Context) (*DashboardData, er
 
 // getOverviewStats retrieves high-level platform statistics
 func (s *AdminService) getOverviewStats(ctx context.Context) *OverviewStats {
+	_ = ctx // Use context to avoid unused parameter warning
 	return &OverviewStats{
 		TotalUsers:          10000,
 		ActiveUsers:         2500,
@@ -265,6 +264,8 @@ func (s *AdminService) getRecentActivity(ctx context.Context, limit int) []Activ
 
 // getTopUsers retrieves top users by various metrics
 func (s *AdminService) getTopUsers(ctx context.Context, limit int) []UserStats {
+	_, cancel := context.WithCancel(ctx)
+	defer cancel()
 	var userStats []UserStats
 
 	for i := 0; i < limit && i < 10; i++ {
@@ -287,11 +288,13 @@ func (s *AdminService) getTopUsers(ctx context.Context, limit int) []UserStats {
 
 // getRevenueMetrics retrieves revenue analytics
 func (s *AdminService) getRevenueMetrics(ctx context.Context) *RevenueMetrics {
+	_, cancel := context.WithCancel(ctx)
+	defer cancel()
 	return &RevenueMetrics{
-		TodayRevenue:   decimal.NewFromFloat(1500),
-		WeekRevenue:    decimal.NewFromFloat(10500),
-		MonthRevenue:   decimal.NewFromFloat(45000),
-		YearRevenue:    decimal.NewFromFloat(500000),
+		TodayRevenue:    decimal.NewFromFloat(1500),
+		WeekRevenue:     decimal.NewFromFloat(10500),
+		MonthRevenue:    decimal.NewFromFloat(45000),
+		YearRevenue:     decimal.NewFromFloat(500000),
 		RevenueByPeriod: s.getRevenueByPeriod(30),
 		RevenueBySport:  s.getRevenueBySport(),
 		RevenueBySource: s.getRevenueBySource(),
@@ -300,24 +303,28 @@ func (s *AdminService) getRevenueMetrics(ctx context.Context) *RevenueMetrics {
 
 // getBettingMetrics retrieves betting analytics
 func (s *AdminService) getBettingMetrics(ctx context.Context) *BettingMetrics {
+	_, cancel := context.WithCancel(ctx)
+	defer cancel()
 	return &BettingMetrics{
-		TotalBets:       50000,
-		WinningBets:     22500,
-		LosingBets:      25000,
-		VoidBets:        2500,
-		TotalVolume:     decimal.NewFromFloat(1000000),
-		AverageBetSize:  decimal.NewFromFloat(20),
-		LargestBet:      decimal.NewFromFloat(10000),
-		SmallestBet:     decimal.NewFromFloat(1),
-		WinRate:         decimal.NewFromFloat(0.45),
-		HoldPercentage:  decimal.NewFromFloat(5.0),
-		BetsBySport:     s.getBetsBySport(),
-		BetsByHour:      s.getBetsByHour(24),
+		TotalBets:      50000,
+		WinningBets:    22500,
+		LosingBets:     25000,
+		VoidBets:       2500,
+		TotalVolume:    decimal.NewFromFloat(1000000),
+		AverageBetSize: decimal.NewFromFloat(20),
+		LargestBet:     decimal.NewFromFloat(10000),
+		SmallestBet:    decimal.NewFromFloat(1),
+		WinRate:        decimal.NewFromFloat(0.45),
+		HoldPercentage: decimal.NewFromFloat(5.0),
+		BetsBySport:    s.getBetsBySport(),
+		BetsByHour:     s.getBetsByHour(24),
 	}
 }
 
 // getFinancialStats retrieves financial statistics
 func (s *AdminService) getFinancialStats(ctx context.Context) *FinancialStats {
+	_, cancel := context.WithCancel(ctx)
+	defer cancel()
 	return &FinancialStats{
 		TotalDeposits:      decimal.NewFromFloat(200000),
 		TotalWithdrawals:   decimal.NewFromFloat(150000),
@@ -331,6 +338,7 @@ func (s *AdminService) getFinancialStats(ctx context.Context) *FinancialStats {
 
 // getSystemHealth retrieves system health metrics
 func (s *AdminService) getSystemHealth(ctx context.Context) *SystemHealth {
+	_ = ctx // Use context to avoid unused parameter warning
 	return &SystemHealth{
 		DatabaseStatus:  "healthy",
 		EventBusStatus:  "healthy",
