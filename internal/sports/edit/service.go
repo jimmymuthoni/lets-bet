@@ -12,63 +12,10 @@ import (
 	"github.com/betting-platform/internal/infrastructure/repository/postgres"
 )
 
-// Movement represents a wallet movement
-type Movement struct {
-	UserID        string                 `json:"user_id"`
-	Amount        decimal.Decimal        `json:"amount"`
-	Type          domain.TransactionType `json:"type"`
-	ReferenceID   *string                `json:"reference_id,omitempty"`
-	ReferenceType string                 `json:"reference_type"`
-	Description   string                 `json:"description"`
-	ProviderName  string                 `json:"provider_name"`
-	ProviderTxnID string                 `json:"provider_txn_id"`
-	CountryCode   string                 `json:"country_code"`
-}
-
-// Transaction represents a wallet transaction
-type Transaction struct {
-	ID string `json:"id"`
-}
-
-// EditBetService handles bet editing operations
-type EditBetService struct {
-	betRepo       *postgres.SportBetRepository
-	matchRepo     *postgres.MatchRepository
-	marketRepo    *postgres.BettingMarketRepository
-	outcomeRepo   *postgres.MarketOutcomeRepository
-	walletService WalletService
-	eventBus      EventBus
-}
-
 // WalletService interface for wallet operations
 type WalletService interface {
 	Credit(ctx context.Context, userID string, amount decimal.Decimal, movement Movement) (*Transaction, error)
 	Debit(ctx context.Context, userID string, amount decimal.Decimal, movement Movement) (*Transaction, error)
-}
-
-// EventBus interface for publishing events
-type EventBus interface {
-	Publish(topic string, data any) error
-}
-
-// EditBetRequest represents a bet edit request
-type EditBetRequest struct {
-	BetID        string          `json:"bet_id"`
-	UserID       string          `json:"user_id"`
-	NewAmount    decimal.Decimal `json:"new_amount"`
-	NewOdds      decimal.Decimal `json:"new_odds"`
-	NewOutcomeID string          `json:"new_outcome_id,omitempty"`
-	Reason       string          `json:"reason"`
-}
-
-// EditBetResponse represents a bet edit response
-type EditBetResponse struct {
-	OriginalBet      *domain.SportBet `json:"original_bet"`
-	EditedBet        *domain.SportBet `json:"edited_bet"`
-	RefundAmount     decimal.Decimal  `json:"refund_amount"`
-	AdditionalAmount decimal.Decimal  `json:"additional_amount"`
-	EditedAt         time.Time        `json:"edited_at"`
-	Reason           string           `json:"reason"`
 }
 
 // NewEditBetService creates a new edit bet service
@@ -284,7 +231,9 @@ func (s *EditBetService) publishEditEvent(originalBet, editedBet *domain.SportBe
 // GetEditableBets returns bets that can be edited for a user
 func (s *EditBetService) GetEditableBets(ctx context.Context, userID string) ([]*domain.SportBet, error) {
 	// Get recent pending bets for the user
-	bets, err := s.betRepo.GetByUserAndStatus(ctx, userID, domain.BetStatusPending)
+	status := domain.BetStatusPending
+	filters := &postgres.BetFilters{Status: &status}
+	bets, err := s.betRepo.GetByUserID(ctx, userID, filters)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user bets: %w", err)
 	}
