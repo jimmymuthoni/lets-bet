@@ -2,6 +2,7 @@ package validation
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -30,13 +31,15 @@ func (e Errors) Error() string {
 	return strings.TrimSuffix(sb.String(), "; ")
 }
 
-// DecodeJSON reads and decodes a JSON body into v with a max body size (1MB).
-func DecodeJSON(r *http.Request, v interface{}) error {
-	r.Body = http.MaxBytesReader(nil, r.Body, 1<<20)
+// DecodeJSON reads and decodes a JSON body into v with a 1 MiB cap.
+// The response writer is passed so http.MaxBytesReader can surface 413 responses
+// to the client when the limit is exceeded.
+func DecodeJSON(w http.ResponseWriter, r *http.Request, v any) error {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(v); err != nil {
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			return fmt.Errorf("empty request body")
 		}
 		return fmt.Errorf("invalid json: %w", err)

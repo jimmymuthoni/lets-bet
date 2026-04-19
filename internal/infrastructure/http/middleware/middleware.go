@@ -122,29 +122,35 @@ type bucket struct {
 	resetAt time.Time
 }
 
-// NewRateLimiter creates a new rate limiter middleware.
-func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
+// NewRateLimiter creates a new rate limiter. The cleanup goroutine exits when
+// ctx is cancelled, preventing a leaked goroutine at shutdown.
+func NewRateLimiter(ctx context.Context, limit int, window time.Duration) *RateLimiter {
 	rl := &RateLimiter{
 		buckets: make(map[string]*bucket),
 		limit:   limit,
 		window:  window,
 	}
-	go rl.cleanup()
+	go rl.cleanup(ctx)
 	return rl
 }
 
-func (rl *RateLimiter) cleanup() {
+func (rl *RateLimiter) cleanup(ctx context.Context) {
 	ticker := time.NewTicker(rl.window)
 	defer ticker.Stop()
-	for range ticker.C {
-		rl.mu.Lock()
-		now := time.Now()
-		for k, b := range rl.buckets {
-			if now.After(b.resetAt) {
-				delete(rl.buckets, k)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			rl.mu.Lock()
+			now := time.Now()
+			for k, b := range rl.buckets {
+				if now.After(b.resetAt) {
+					delete(rl.buckets, k)
+				}
 			}
+			rl.mu.Unlock()
 		}
-		rl.mu.Unlock()
 	}
 }
 
@@ -221,7 +227,7 @@ func ClaimsFromRequest(r *http.Request) (*auth.Claims, bool) {
 	return c, ok
 }
 
-func writeJSON(w http.ResponseWriter, status int, body interface{}) {
+func writeJSON(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(body)
