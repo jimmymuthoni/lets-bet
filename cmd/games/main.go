@@ -24,7 +24,7 @@ import (
 )
 
 func main() {
-	cfg, err := config.Load("games")
+	cfg, err := config.LoadConfig()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to load config: %v\n", err)
 		os.Exit(1)
@@ -79,7 +79,7 @@ func main() {
 	}
 
 	engine := games.NewCrashGameEngine(hub, fairService, gameRepo, betRepo, walletService, taxEngine)
-	go engine.Start(ctx)
+	go engine.StartGame(ctx)
 
 	r := mux.NewRouter()
 

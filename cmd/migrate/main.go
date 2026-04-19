@@ -14,7 +14,7 @@ func main() {
 	dir := flag.String("dir", "./migrations", "migrations directory")
 	flag.Parse()
 
-	cfg, err := config.Load("migrate")
+	cfg, err := config.LoadConfig()
 	if err != nil {
 		slog.Error("failed to load config", "error", err)
 		os.Exit(1)

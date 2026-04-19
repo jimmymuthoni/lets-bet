@@ -18,7 +18,7 @@ import (
 )
 
 func main() {
-	cfg, err := config.Load("wallet")
+	cfg, err := config.LoadConfig()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to load config: %v\n", err)
 		os.Exit(1)
