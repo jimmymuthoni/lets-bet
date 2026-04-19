@@ -8,337 +8,273 @@ import (
 	"time"
 )
 
-// Config is the centralized configuration for all services.
-type Config struct {
-	Service     ServiceConfig
-	Database    DatabaseConfig
-	Redis       RedisConfig
-	NATS        NATSConfig
-	Tenant      TenantConfig
-	JWT         JWTConfig
-	Security    SecurityConfig
-	MPesa       MPesaConfig
-	Flutterwave FlutterwaveConfig
-	Sportradar  SportradarConfig
-	SmileID     SmileIDConfig
-	Tax         TaxConfig
-	Crash       CrashConfig
-	Bet         BetConfig
-	Logging     LoggingConfig
-	Features    FeatureFlags
-}
-
-type ServiceConfig struct {
-	Name        string
-	Environment string // development, staging, production
-	Port        int
-}
-
-type DatabaseConfig struct {
-	Host            string
-	Port            int
-	Name            string
-	User            string
-	Password        string
-	SSLMode         string
-	MaxOpenConns    int
-	MaxIdleConns    int
-	ConnMaxLifetime time.Duration
-}
-
-func (d DatabaseConfig) DSN() string {
-	return fmt.Sprintf(
-		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-		d.Host, d.Port, d.User, d.Password, d.Name, d.SSLMode,
-	)
-}
-
-type RedisConfig struct {
-	Host     string
-	Port     int
-	Password string
-	DB       int
-}
-
-func (r RedisConfig) Addr() string {
-	return fmt.Sprintf("%s:%d", r.Host, r.Port)
-}
-
-type NATSConfig struct {
-	URL string
-}
-
-type TenantConfig struct {
-	CountryCode      string // primary launch country: KE, NG, GH
-	Currency         string // KES, NGN, GHS
-	Timezone         string
-	AllowedCountries []string // ISO codes allowed by the geolocation fence (empty = allow all)
-}
-
-type JWTConfig struct {
-	Secret       string
-	Issuer       string
-	ExpiryHours  int
-	RefreshHours int
-}
-
-type SecurityConfig struct {
-	BcryptCost         int
-	RateLimitRequests  int
-	RateLimitWindow    time.Duration
-	CORSAllowedOrigins []string
-	CORSAllowedMethods []string
-	CORSAllowedHeaders []string
-}
-
-type MPesaConfig struct {
-	Environment        string
-	ConsumerKey        string
-	ConsumerSecret     string
-	ShortCode          string
-	PassKey            string
-	InitiatorName      string
-	SecurityCredential string
-	CallbackBaseURL    string
-}
-
-type FlutterwaveConfig struct {
-	SecretKey string
-	PublicKey string
-}
-
-type SportradarConfig struct {
-	APIKey string
-	APIURL string
-}
-
-type SmileIDConfig struct {
-	APIKey    string
-	PartnerID string
-	Env       string // sandbox or production
-}
-
-type TaxConfig struct {
-	GGRRate   float64
-	WHTRate   float64
-	Threshold float64
-}
-
-type CrashConfig struct {
-	TickInterval  time.Duration
-	MinBet        float64
-	MaxBet        float64
-	MaxMultiplier float64
-	HouseEdge     float64
-}
-
-type BetConfig struct {
-	MinStake           float64
-	MaxStake           float64
-	MaxSelectionsMulti int
-}
-
-type LoggingConfig struct {
-	Level  string
-	Format string // json or text
-}
-
-type FeatureFlags struct {
-	LiveBetting   bool
-	CrashGames    bool
-	VirtualSports bool
-	Casino        bool
-	DebugMode     bool
-	EnableSwagger bool
-	EnablePprof   bool
-}
-
-// Load reads configuration from environment variables.
-// A service name can be provided to scope per-service port env lookup.
-func Load(serviceName string) (*Config, error) {
-	cfg := &Config{
+// LoadConfig loads configuration from environment variables
+func LoadConfig() (*Config, error) {
+	config := &Config{
 		Service: ServiceConfig{
-			Name:        getString("SERVICE_NAME", serviceName),
-			Environment: getString("ENVIRONMENT", "development"),
-			Port:        getInt("PORT", 8080),
+			Name:        getEnv(EnvServiceName, DefaultServiceName),
+			Environment: getEnv(EnvServiceEnvironment, DefaultServiceEnvironment),
+			Port:        getEnvInt(EnvServicePort, DefaultServicePort),
 		},
 		Database: DatabaseConfig{
-			Host:            getString("DATABASE_HOST", "localhost"),
-			Port:            getInt("DATABASE_PORT", 5432),
-			Name:            getString("DATABASE_NAME", "betting_db"),
-			User:            getString("DATABASE_USER", "postgres"),
-			Password:        getString("DATABASE_PASSWORD", "postgres"),
-			SSLMode:         getString("DATABASE_SSL_MODE", "disable"),
-			MaxOpenConns:    getInt("DATABASE_MAX_OPEN_CONNS", 25),
-			MaxIdleConns:    getInt("DATABASE_MAX_IDLE_CONNS", 5),
-			ConnMaxLifetime: getDuration("DATABASE_CONN_MAX_LIFETIME", 5*time.Minute),
+			Host:            getEnv(EnvDBHost, DefaultDBHost),
+			Port:            getEnvInt(EnvDBPort, DefaultDBPort),
+			Name:            getEnv(EnvDBName, DefaultDBName),
+			User:            getEnv(EnvDBUser, DefaultDBUser),
+			Password:        getEnv(EnvDBPassword, ""),
+			SSLMode:         getEnv(EnvDBSSLMode, DefaultDBSSLMode),
+			MaxOpenConns:    getEnvInt(EnvDBMaxOpenConns, DefaultDBMaxOpenConns),
+			MaxIdleConns:    getEnvInt(EnvDBMaxIdleConns, DefaultDBMaxIdleConns),
+			ConnMaxLifetime: getEnvDuration(EnvDBConnMaxLifetime, DefaultDBConnMaxLifetime),
 		},
 		Redis: RedisConfig{
-			Host:     getString("REDIS_HOST", "localhost"),
-			Port:     getInt("REDIS_PORT", 6379),
-			Password: getString("REDIS_PASSWORD", ""),
-			DB:       getInt("REDIS_DB", 0),
+			Host:         getEnv(EnvRedisHost, DefaultRedisHost),
+			Port:         getEnvInt(EnvRedisPort, DefaultRedisPort),
+			Password:     getEnv(EnvRedisPassword, ""),
+			DB:           getEnvInt(EnvRedisDB, DefaultRedisDB),
+			PoolSize:     getEnvInt(EnvRedisPoolSize, DefaultRedisPoolSize),
+			MinIdleConns: getEnvInt(EnvRedisMinIdleConns, DefaultRedisMinIdleConns),
+			DialTimeout:  getEnvDuration(EnvRedisDialTimeout, DefaultRedisDialTimeout),
+			ReadTimeout:  getEnvDuration(EnvRedisReadTimeout, DefaultRedisReadTimeout),
+			WriteTimeout: getEnvDuration(EnvRedisWriteTimeout, DefaultRedisWriteTimeout),
 		},
 		NATS: NATSConfig{
-			URL: getString("NATS_URL", "nats://localhost:4222"),
+			URL:           getEnv(EnvNATSURL, DefaultNATSURL),
+			MaxReconnects: getEnvInt(EnvNATSMaxReconnects, DefaultNATSMaxReconnects),
+			ReconnectWait: getEnvDuration(EnvNATSReconnectWait, DefaultNATSReconnectWait),
+			Timeout:       getEnvDuration(EnvNATSTimeout, DefaultNATSTimeout),
+			PingInterval:  getEnvDuration(EnvNATSPingInterval, DefaultNATSPingInterval),
+			MaxPingsOut:   getEnvInt(EnvNATSMaxPingsOut, DefaultNATSMaxPingsOut),
 		},
 		Tenant: TenantConfig{
-			CountryCode:      getString("COUNTRY_CODE", "KE"),
-			Currency:         getString("CURRENCY", "KES"),
-			Timezone:         getString("TIMEZONE", "Africa/Nairobi"),
-			AllowedCountries: getStringSlice("ALLOWED_COUNTRIES", nil),
+			DefaultCountry:      getEnv(EnvTenantDefaultCountry, DefaultTenantDefaultCountry),
+			DefaultCurrency:     getEnv(EnvTenantDefaultCurrency, DefaultTenantDefaultCurrency),
+			SupportedCountries:  strings.Split(getEnv("TENANT_SUPPORTED_COUNTRIES", "KE,UG,TZ,NG,ZA"), ","),
+			SupportedCurrencies: strings.Split(getEnv("TENANT_SUPPORTED_CURRENCIES", "KES,UGX,TZS,NGN,ZAR"), ","),
+			AllowedCountries:    strings.Split(getEnv("TENANT_ALLOWED_COUNTRIES", "KE,UG,TZ,NG,ZA"), ","),
 		},
 		JWT: JWTConfig{
-			Secret:       getString("JWT_SECRET", "change-me-in-production"),
-			Issuer:       getString("JWT_ISSUER", "betting-platform"),
-			ExpiryHours:  getInt("JWT_EXPIRY_HOURS", 24),
-			RefreshHours: getInt("JWT_REFRESH_EXPIRY_HOURS", 168),
+			Secret:         getEnv(EnvJWTSecret, ""),
+			ExpirationTime: getEnvDuration(EnvJWTExpirationTime, DefaultJWTExpirationTime),
+			Issuer:         getEnv(EnvJWTIssuer, DefaultJWTIssuer),
+			RefreshTime:    getEnvDuration(EnvJWTRefreshTime, DefaultJWTRefreshTime),
 		},
 		Security: SecurityConfig{
-			BcryptCost:         getInt("BCRYPT_COST", 12),
-			RateLimitRequests:  getInt("RATE_LIMIT_REQUESTS", 100),
-			RateLimitWindow:    getDuration("RATE_LIMIT_WINDOW", time.Minute),
-			CORSAllowedOrigins: getStringSlice("CORS_ALLOWED_ORIGINS", []string{"*"}),
-			CORSAllowedMethods: getStringSlice("CORS_ALLOWED_METHODS", []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}),
-			CORSAllowedHeaders: getStringSlice("CORS_ALLOWED_HEADERS", []string{"Content-Type", "Authorization"}),
+			CORSOrigins:           strings.Split(getEnv(EnvSecurityCORSOrigins, "*"), ","),
+			CORSAllowedOrigins:    strings.Split(getEnv(EnvSecurityCORSAllowedOrigins, "*"), ","),
+			CORSAllowedMethods:    strings.Split(getEnv(EnvSecurityCORSAllowedMethods, "GET,POST,PUT,DELETE,OPTIONS"), ","),
+			CORSAllowedHeaders:    strings.Split(getEnv(EnvSecurityCORSAllowedHeaders, "Content-Type,Authorization"), ","),
+			RateLimitPerMinute:    getEnvInt(EnvSecurityRateLimitPerMinute, DefaultSecurityRateLimitPerMinute),
+			RateLimitRequests:     getEnvInt(EnvSecurityRateLimitRequests, 1000),
+			RateLimitWindow:       getEnvDuration(EnvSecurityRateLimitWindow, time.Minute),
+			MaxBodySize:           getEnvInt64(EnvSecurityMaxBodySize, DefaultSecurityMaxBodySize),
+			EnableHTTPS:           getEnvBool(EnvSecurityEnableHTTPS, DefaultSecurityEnableHTTPS),
+			SessionTimeout:        getEnvDuration(EnvSecuritySessionTimeout, DefaultSecuritySessionTimeout),
+			PasswordMinLength:     getEnvInt(EnvSecurityPasswordMinLength, DefaultSecurityPasswordMinLength),
+			PasswordRequireUpper:  getEnvBool(EnvSecurityPasswordRequireUpper, DefaultSecurityPasswordRequireUpper),
+			PasswordRequireLower:  getEnvBool(EnvSecurityPasswordRequireLower, DefaultSecurityPasswordRequireLower),
+			PasswordRequireNumber: getEnvBool(EnvSecurityPasswordRequireNumber, DefaultSecurityPasswordRequireNumber),
+			PasswordRequireSymbol: getEnvBool(EnvSecurityPasswordRequireSymbol, DefaultSecurityPasswordRequireSymbol),
 		},
 		MPesa: MPesaConfig{
-			Environment:        getString("MPESA_ENVIRONMENT", "sandbox"),
-			ConsumerKey:        getString("MPESA_CONSUMER_KEY", ""),
-			ConsumerSecret:     getString("MPESA_CONSUMER_SECRET", ""),
-			ShortCode:          getString("MPESA_SHORTCODE", ""),
-			PassKey:            getString("MPESA_PASSKEY", ""),
-			InitiatorName:      getString("MPESA_INITIATOR_NAME", ""),
-			SecurityCredential: getString("MPESA_SECURITY_CREDENTIAL", ""),
-			CallbackBaseURL:    getString("MPESA_CALLBACK_BASE_URL", "http://localhost:8080"),
+			ConsumerKey:        getEnv(EnvMPesaConsumerKey, ""),
+			ConsumerSecret:     getEnv(EnvMPesaConsumerSecret, ""),
+			ShortCode:          getEnv(EnvMPesaShortCode, ""),
+			PassKey:            getEnv(EnvMPesaPassKey, ""),
+			InitiatorName:      getEnv(EnvMPesaInitiatorName, ""),
+			SecurityCredential: getEnv(EnvMPesaSecurityCredential, ""),
+			Environment:        getEnv(EnvMPesaEnvironment, DefaultMPesaEnvironment),
+			CallbackURL:        getEnv(EnvMPesaCallbackURL, ""),
+			Timeout:            getEnvDuration(EnvMPesaTimeout, DefaultMPesaTimeout),
 		},
 		Flutterwave: FlutterwaveConfig{
-			SecretKey: getString("FLUTTERWAVE_SECRET_KEY", ""),
-			PublicKey: getString("FLUTTERWAVE_PUBLIC_KEY", ""),
+			PublicKey:     getEnv(EnvFlutterwavePublicKey, ""),
+			SecretKey:     getEnv(EnvFlutterwaveSecretKey, ""),
+			EncryptionKey: getEnv(EnvFlutterwaveEncryptionKey, ""),
+			BaseURL:       getEnv(EnvFlutterwaveBaseURL, DefaultFlutterwaveBaseURL),
+			WebhookSecret: getEnv(EnvFlutterwaveWebhookSecret, ""),
+			Timeout:       getEnvDuration(EnvFlutterwaveTimeout, DefaultFlutterwaveTimeout),
 		},
 		Sportradar: SportradarConfig{
-			APIKey: getString("SPORTRADAR_API_KEY", ""),
-			APIURL: getString("SPORTRADAR_API_URL", "https://api.sportradar.com"),
+			APIKey:           getEnv(EnvSportradarAPIKey, ""),
+			BaseURL:          getEnv(EnvSportradarBaseURL, DefaultSportradarBaseURL),
+			Timeout:          getEnvDuration(EnvSportradarTimeout, DefaultSportradarTimeout),
+			RateLimit:        getEnvInt(EnvSportradarRateLimit, DefaultSportradarRateLimit),
+			EnableSoccer:     getEnvBool(EnvSportradarEnableSoccer, DefaultSportradarEnableSoccer),
+			EnableBasketball: getEnvBool(EnvSportradarEnableBasketball, DefaultSportradarEnableBasketball),
+			EnableTennis:     getEnvBool(EnvSportradarEnableTennis, DefaultSportradarEnableTennis),
+			EnableCricket:    getEnvBool(EnvSportradarEnableCricket, DefaultSportradarEnableCricket),
 		},
 		SmileID: SmileIDConfig{
-			APIKey:    getString("SMILE_ID_API_KEY", ""),
-			PartnerID: getString("SMILE_ID_PARTNER_ID", ""),
-			Env:       getString("SMILE_ID_ENV", "sandbox"),
+			PartnerID:            getEnv(EnvSmileIDPartnerID, ""),
+			APIKey:               getEnv(EnvSmileIDAPIKey, ""),
+			BaseURL:              getEnv(EnvSmileIDBaseURL, ""),
+			Environment:          getEnv(EnvSmileIDEnvironment, DefaultSmileIDEnvironment),
+			Timeout:              getEnvDuration(EnvSmileIDTimeout, DefaultSmileIDTimeout),
+			EnableKYC:            getEnvBool(EnvSmileIDEnableKYC, DefaultSmileIDEnableKYC),
+			EnableIDVerification: getEnvBool(EnvSmileIDEnableIDVerification, DefaultSmileIDEnableIDVerification),
 		},
 		Tax: TaxConfig{
-			GGRRate:   getFloat("TAX_GGR_RATE", 0.15),
-			WHTRate:   getFloat("TAX_WHT_RATE", 0.20),
-			Threshold: getFloat("TAX_THRESHOLD", 500),
+			Enabled:            getEnvBool(EnvTaxEnabled, DefaultTaxEnabled),
+			DefaultRate:        getEnvFloat64(EnvTaxDefaultRate, DefaultTaxDefaultRate),
+			WHTRate:            getEnvFloat64(EnvTaxWHTRate, DefaultTaxWHTRate),
+			GamingTaxRate:      getEnvFloat64(EnvTaxGamingTaxRate, DefaultTaxGamingTaxRate),
+			TransactionTaxRate: getEnvFloat64(EnvTaxTransactionTaxRate, DefaultTaxTransactionTaxRate),
+			Currency:           getEnv(EnvTaxCurrency, DefaultTaxCurrency),
+			AutoCalculate:      getEnvBool(EnvTaxAutoCalculate, DefaultTaxAutoCalculate),
 		},
 		Crash: CrashConfig{
-			TickInterval:  getDuration("CRASH_TICK_INTERVAL", 100*time.Millisecond),
-			MinBet:        getFloat("CRASH_MIN_BET", 10),
-			MaxBet:        getFloat("CRASH_MAX_BET", 10000),
-			MaxMultiplier: getFloat("CRASH_MAX_MULTIPLIER", 100),
-			HouseEdge:     getFloat("CRASH_HOUSE_EDGE", 0.01),
+			Enabled:       getEnvBool(EnvCrashEnabled, DefaultCrashEnabled),
+			BaseURL:       getEnv(EnvCrashBaseURL, ""),
+			APIKey:        getEnv(EnvCrashAPIKey, ""),
+			SecretKey:     getEnv(EnvCrashSecretKey, ""),
+			Timeout:       getEnvDuration(EnvCrashTimeout, DefaultCrashTimeout),
+			MaxBetAmount:  getEnvFloat64(EnvCrashMaxBetAmount, DefaultCrashMaxBetAmount),
+			MinBetAmount:  getEnvFloat64(EnvCrashMinBetAmount, DefaultCrashMinBetAmount),
+			MaxMultiplier: getEnvFloat64(EnvCrashMaxMultiplier, DefaultCrashMaxMultiplier),
+			MinMultiplier: getEnvFloat64(EnvCrashMinMultiplier, DefaultCrashMinMultiplier),
+			HouseEdge:     getEnvFloat64(EnvCrashHouseEdge, DefaultCrashHouseEdge),
 		},
 		Bet: BetConfig{
-			MinStake:           getFloat("MIN_BET_STAKE", 10),
-			MaxStake:           getFloat("MAX_BET_STAKE", 100000),
-			MaxSelectionsMulti: getInt("MAX_SELECTIONS_MULTI", 20),
+			MinBetAmount:    getEnvFloat64(EnvBetMinBetAmount, DefaultBetMinBetAmount),
+			MaxBetAmount:    getEnvFloat64(EnvBetMaxBetAmount, DefaultBetMaxBetAmount),
+			MaxParlaySize:   getEnvInt(EnvBetMaxParlaySize, DefaultBetMaxParlaySize),
+			MaxOdds:         getEnvFloat64(EnvBetMaxOdds, DefaultBetMaxOdds),
+			MinOdds:         getEnvFloat64(EnvBetMinOdds, DefaultBetMinOdds),
+			StakeTimeout:    getEnvDuration(EnvBetStakeTimeout, DefaultBetStakeTimeout),
+			SettlementDelay: getEnvDuration(EnvBetSettlementDelay, DefaultBetSettlementDelay),
+			CancelDelay:     getEnvDuration(EnvBetCancelDelay, DefaultBetCancelDelay),
 		},
 		Logging: LoggingConfig{
-			Level:  getString("LOG_LEVEL", "info"),
-			Format: getString("LOG_FORMAT", "json"),
+			Level:      getEnv(EnvLoggingLevel, DefaultLoggingLevel),
+			Format:     getEnv(EnvLoggingFormat, DefaultLoggingFormat),
+			Output:     getEnv(EnvLoggingOutput, DefaultLoggingOutput),
+			File:       getEnv(EnvLoggingFile, DefaultLoggingFile),
+			MaxSize:    getEnvInt(EnvLoggingMaxSize, DefaultLoggingMaxSize),
+			MaxBackups: getEnvInt(EnvLoggingMaxBackups, DefaultLoggingMaxBackups),
+			MaxAge:     getEnvInt(EnvLoggingMaxAge, DefaultLoggingMaxAge),
+			Compress:   getEnvBool(EnvLoggingCompress, DefaultLoggingCompress),
 		},
 		Features: FeatureFlags{
-			LiveBetting:   getBool("FEATURE_LIVE_BETTING", true),
-			CrashGames:    getBool("FEATURE_CRASH_GAMES", true),
-			VirtualSports: getBool("FEATURE_VIRTUAL_SPORTS", false),
-			Casino:        getBool("FEATURE_CASINO", false),
-			DebugMode:     getBool("DEBUG_MODE", false),
-			EnableSwagger: getBool("ENABLE_SWAGGER", true),
-			EnablePprof:   getBool("ENABLE_PPROF", false),
+			EnableLiveBetting:       getEnvBool(EnvFeatureEnableLiveBetting, DefaultFeatureEnableLiveBetting),
+			EnableVirtualSports:     getEnvBool(EnvFeatureEnableVirtualSports, DefaultFeatureEnableVirtualSports),
+			EnableJackpot:           getEnvBool(EnvFeatureEnableJackpot, DefaultFeatureEnableJackpot),
+			EnablePromotions:        getEnvBool(EnvFeatureEnablePromotions, DefaultFeatureEnablePromotions),
+			EnableNotifications:     getEnvBool(EnvFeatureEnableNotifications, DefaultFeatureEnableNotifications),
+			EnableAnalytics:         getEnvBool(EnvFeatureEnableAnalytics, DefaultFeatureEnableAnalytics),
+			EnableResponsibleGaming: getEnvBool(EnvFeatureEnableResponsibleGaming, DefaultFeatureEnableResponsibleGaming),
+			EnableMultiCurrency:     getEnvBool(EnvFeatureEnableMultiCurrency, DefaultFeatureEnableMultiCurrency),
+			EnableMobileApp:         getEnvBool(EnvFeatureEnableMobileApp, DefaultFeatureEnableMobileApp),
+			EnableAPIV2:             getEnvBool(EnvFeatureEnableAPIV2, DefaultFeatureEnableAPIV2),
+			EnableBetaFeatures:      getEnvBool(EnvFeatureEnableBetaFeatures, DefaultFeatureEnableBetaFeatures),
 		},
 	}
 
-	if err := cfg.Validate(); err != nil {
-		return nil, err
-	}
-	return cfg, nil
+	return config, nil
 }
 
-// Validate ensures required configuration values are set for the chosen environment.
-func (c *Config) Validate() error {
-	if c.Service.Environment == "production" {
-		if c.JWT.Secret == "" || c.JWT.Secret == "change-me-in-production" {
-			return fmt.Errorf("JWT_SECRET must be set in production")
-		}
-		if c.Database.Password == "" {
-			return fmt.Errorf("DATABASE_PASSWORD must be set in production")
-		}
+// ValidateConfig validates the configuration
+func ValidateConfig(config *Config) error {
+	if config.Service.Name == "" {
+		return fmt.Errorf("service name is required")
 	}
-	if c.Service.Port <= 0 || c.Service.Port > 65535 {
-		return fmt.Errorf("invalid PORT: %d", c.Service.Port)
+
+	if config.Service.Port <= 0 || config.Service.Port > 65535 {
+		return fmt.Errorf("invalid service port: %d", config.Service.Port)
 	}
-	if c.Tenant.CountryCode == "" {
-		return fmt.Errorf("COUNTRY_CODE is required")
+
+	if config.Database.Host == "" {
+		return fmt.Errorf("database host is required")
 	}
+
+	if config.Database.Port <= 0 || config.Database.Port > 65535 {
+		return fmt.Errorf("invalid database port: %d", config.Database.Port)
+	}
+
+	if config.Database.Name == "" {
+		return fmt.Errorf("database name is required")
+	}
+
+	if config.Database.User == "" {
+		return fmt.Errorf("database user is required")
+	}
+
+	if config.JWT.Secret == "" {
+		return fmt.Errorf("JWT secret is required")
+	}
+
+	if config.JWT.ExpirationTime <= 0 {
+		return fmt.Errorf("JWT expiration time must be positive")
+	}
+
+	if config.Security.PasswordMinLength < 6 {
+		return fmt.Errorf("password minimum length must be at least 6")
+	}
+
 	return nil
 }
 
-// IsProduction returns true when environment is production.
-func (c *Config) IsProduction() bool {
-	return strings.EqualFold(c.Service.Environment, "production")
+// LoadFromFile loads configuration from a JSON file
+func LoadFromFile(filename string) (*Config, error) {
+	// This would typically use a JSON library to load from file
+	// For now, we'll return an error as this isn't fully implemented
+	return nil, fmt.Errorf("loading from file not implemented")
 }
 
-// --- helpers ---
-
-func getString(key, def string) string {
-	if v, ok := os.LookupEnv(key); ok && v != "" {
-		return v
+// GetEnv gets environment variable with fallback
+func getEnv(key, fallback string) string {
+	if value, exists := os.LookupEnv(key); exists {
+		return value
 	}
-	return def
+	return fallback
 }
 
-func getInt(key string, def int) int {
-	if v, ok := os.LookupEnv(key); ok {
-		if n, err := strconv.Atoi(v); err == nil {
-			return n
+// GetEnvInt gets environment variable as integer with fallback
+func getEnvInt(key string, fallback int) int {
+	if value, exists := os.LookupEnv(key); exists {
+		if intValue, err := strconv.Atoi(value); err == nil {
+			return intValue
 		}
 	}
-	return def
+	return fallback
 }
 
-func getFloat(key string, def float64) float64 {
-	if v, ok := os.LookupEnv(key); ok {
-		if n, err := strconv.ParseFloat(v, 64); err == nil {
-			return n
+// GetEnvInt64 gets environment variable as int64 with fallback
+func getEnvInt64(key string, fallback int64) int64 {
+	if value, exists := os.LookupEnv(key); exists {
+		if intValue, err := strconv.ParseInt(value, 10, 64); err == nil {
+			return intValue
 		}
 	}
-	return def
+	return fallback
 }
 
-func getBool(key string, def bool) bool {
-	if v, ok := os.LookupEnv(key); ok {
-		if b, err := strconv.ParseBool(v); err == nil {
-			return b
+// GetEnvFloat64 gets environment variable as float64 with fallback
+func getEnvFloat64(key string, fallback float64) float64 {
+	if value, exists := os.LookupEnv(key); exists {
+		if floatValue, err := strconv.ParseFloat(value, 64); err == nil {
+			return floatValue
 		}
 	}
-	return def
+	return fallback
 }
 
-func getDuration(key string, def time.Duration) time.Duration {
-	if v, ok := os.LookupEnv(key); ok {
-		if d, err := time.ParseDuration(v); err == nil {
-			return d
+// GetEnvBool gets environment variable as boolean with fallback
+func getEnvBool(key string, fallback bool) bool {
+	if value, exists := os.LookupEnv(key); exists {
+		if boolValue, err := strconv.ParseBool(value); err == nil {
+			return boolValue
 		}
 	}
-	return def
+	return fallback
 }
 
-func getStringSlice(key string, def []string) []string {
-	if v, ok := os.LookupEnv(key); ok && v != "" {
-		parts := strings.Split(v, ",")
-		for i := range parts {
-			parts[i] = strings.TrimSpace(parts[i])
+// GetEnvDuration gets environment variable as duration with fallback
+func getEnvDuration(key string, fallback time.Duration) time.Duration {
+	if value, exists := os.LookupEnv(key); exists {
+		if duration, err := time.ParseDuration(value); err == nil {
+			return duration
 		}
-		return parts
 	}
-	return def
+	return fallback
 }
