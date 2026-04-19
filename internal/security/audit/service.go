@@ -118,8 +118,8 @@ func (s *SecurityAuditService) ScheduleAudit(ctx context.Context, scheduledTime 
 	return nil
 }
 
-// calculateSecurityScore calculates overall security score
-func (s *SecurityAuditService) calculateSecurityScore(findings []SecurityFinding) int {
+// _calculateSecurityScore calculates overall security score
+func (s *SecurityAuditService) _calculateSecurityScore(findings []SecurityFinding) int {
 	if len(findings) == 0 {
 		return 100
 	}

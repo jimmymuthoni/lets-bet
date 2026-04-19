@@ -96,6 +96,8 @@ func (s *BCLBService) ValidateLargeTransaction(ctx context.Context, userID strin
 func (s *BCLBService) hasRecentLargeTransactions(userID string, amount decimal.Decimal) bool {
 	// In a real implementation, this would query the database for recent transactions
 	// For now, return false as a placeholder
+	_ = userID // Suppress unused parameter warning
+	_ = amount // Suppress unused parameter warning
 	return false
 }
 
@@ -111,9 +113,9 @@ func (s *BCLBService) ValidateHighRiskTransaction(ctx context.Context, userID st
 	// Define high-risk transaction types
 	highRiskTypes := map[string]bool{
 		"international_transfer": true,
-		"third_party_payment":   true,
-		"crypto_exchange":       true,
-		"anonymous_payment":     true,
+		"third_party_payment":    true,
+		"crypto_exchange":        true,
+		"anonymous_payment":      true,
 	}
 
 	if highRiskTypes[transactionType] {

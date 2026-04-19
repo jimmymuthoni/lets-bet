@@ -127,8 +127,8 @@ func isWinner(ticketNumbers, winningNumbers []int) bool {
 	return true
 }
 
-// calculateOdds calculates the odds of winning
-func calculateOdds(totalNumbers int, numbersToChoose int) *big.Rat {
+// _calculateOdds calculates the odds of winning
+func _calculateOdds(totalNumbers int, numbersToChoose int) *big.Rat {
 	// Calculate combinations: C(totalNumbers, numbersToChoose)
 	numerator := big.NewInt(1)
 	denominator := big.NewInt(1)
@@ -141,16 +141,16 @@ func calculateOdds(totalNumbers int, numbersToChoose int) *big.Rat {
 	return new(big.Rat).SetFrac(numerator, denominator)
 }
 
-// formatOdds formats odds as a string
-func formatOdds(odds *big.Rat) string {
+// _formatOdds formats odds as a string
+func _formatOdds(odds *big.Rat) string {
 	if odds.IsInt() {
 		return fmt.Sprintf("1 in %s", odds.Denom().String())
 	}
 	return fmt.Sprintf("1 in %.2f", float64(odds.Denom().Int64())/float64(odds.Num().Int64()))
 }
 
-// calculateExpectedValue calculates expected value of a ticket
-func calculateExpectedValue(jackpotAmount, ticketCost decimal.Decimal, totalTickets int64) decimal.Decimal {
+// _calculateExpectedValue calculates expected value of a ticket
+func _calculateExpectedValue(jackpotAmount, ticketCost decimal.Decimal, totalTickets int64) decimal.Decimal {
 	if totalTickets == 0 {
 		return decimal.Zero
 	}
@@ -160,16 +160,16 @@ func calculateExpectedValue(jackpotAmount, ticketCost decimal.Decimal, totalTick
 	return expectedWin.Sub(ticketCost)
 }
 
-// getJackpotProgress calculates jackpot progress as percentage
-func getJackpotProgress(currentAmount, targetAmount decimal.Decimal) decimal.Decimal {
+// _getJackpotProgress calculates jackpot progress as percentage
+func _getJackpotProgress(currentAmount, targetAmount decimal.Decimal) decimal.Decimal {
 	if targetAmount.LessThanOrEqual(decimal.Zero) {
 		return decimal.Zero
 	}
 	return currentAmount.Div(targetAmount).Mul(decimal.NewFromInt(100))
 }
 
-// getTimeUntilDraw returns time until next draw
-func getTimeUntilDraw(nextDrawTime time.Time) string {
+// _getTimeUntilDraw returns time until next draw
+func _getTimeUntilDraw(nextDrawTime time.Time) string {
 	duration := time.Until(nextDrawTime)
 
 	if duration <= 0 {
@@ -189,13 +189,13 @@ func getTimeUntilDraw(nextDrawTime time.Time) string {
 	}
 }
 
-// formatAmount formats decimal amount for display
-func formatAmount(amount decimal.Decimal) string {
+// _formatAmount formats decimal amount for display
+func _formatAmount(amount decimal.Decimal) string {
 	return amount.StringFixedBank(2)
 }
 
-// validateNumbers validates number selection
-func validateNumbers(numbers []int, min, max int) error {
+// _validateNumbers validates number selection
+func _validateNumbers(numbers []int, min, max int) error {
 	if len(numbers) == 0 {
 		return fmt.Errorf("at least one number is required")
 	}
@@ -214,8 +214,8 @@ func validateNumbers(numbers []int, min, max int) error {
 	return nil
 }
 
-// generateQuickPick generates random quick pick numbers
-func generateQuickPick(rng *rand.Rand, count, min, max int) []int {
+// _generateQuickPick generates random quick pick numbers
+func _generateQuickPick(rng *rand.Rand, count, min, max int) []int {
 	if count > (max - min + 1) {
 		count = max - min + 1
 	}
@@ -236,8 +236,8 @@ func generateQuickPick(rng *rand.Rand, count, min, max int) []int {
 	return numbers
 }
 
-// calculatePrizeTier calculates prize for different matching numbers
-func calculatePrizeTier(jackpotAmount decimal.Decimal, matches int) decimal.Decimal {
+// _calculatePrizeTier calculates prize for different matching numbers
+func _calculatePrizeTier(jackpotAmount decimal.Decimal, matches int) decimal.Decimal {
 	switch matches {
 	case 6:
 		return jackpotAmount // Full jackpot

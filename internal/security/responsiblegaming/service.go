@@ -38,10 +38,10 @@ func (s *ResponsibleGamingService) PerformResponsibleGamingAssessment(ctx contex
 	assessment.Violations = violations
 
 	// Calculate compliance score
-	assessment.ComplianceScore = calculateComplianceScore(assessment)
+	assessment.ComplianceScore = _calculateComplianceScore(assessment)
 
 	// Generate recommendations
-	assessment.Recommendations = generateRGRecommendations(assessment)
+	assessment.Recommendations = _generateRGRecommendations(assessment)
 
 	// Publish assessment completion event
 	s.publishRGEvent("responsible_gaming.assessment.completed", assessment)
@@ -59,13 +59,13 @@ func (s *ResponsibleGamingService) GetUserResponsibleGamingStatus(ctx context.Co
 	}
 
 	// Get user-specific data
-	selfExclusion := getUserSelfExclusion(ctx, userID)
-	depositLimits := getUserDepositLimits(ctx, userID)
-	bettingLimits := getUserBettingLimits(ctx, userID)
-	timeLimits := getUserTimeLimits(ctx, userID)
-	coolingOffPeriods := getUserCoolingOffPeriods(ctx, userID)
-	interventions := getUserInterventions(ctx, userID)
-	violations := getUserViolations(ctx, userID)
+	selfExclusion := _getUserSelfExclusion(ctx, userID)
+	depositLimits := _getUserDepositLimits(ctx, userID)
+	bettingLimits := _getUserBettingLimits(ctx, userID)
+	timeLimits := _getUserTimeLimits(ctx, userID)
+	coolingOffPeriods := _getUserCoolingOffPeriods(ctx, userID)
+	interventions := _getUserInterventions(ctx, userID)
+	violations := _getUserViolations(ctx, userID)
 
 	// Set assessment data
 	assessment.SelfExclusion = selfExclusion
@@ -77,10 +77,10 @@ func (s *ResponsibleGamingService) GetUserResponsibleGamingStatus(ctx context.Co
 	assessment.Violations = violations
 
 	// Calculate compliance score
-	assessment.ComplianceScore = calculateUserComplianceScore(assessment)
+	assessment.ComplianceScore = _calculateUserComplianceScore(assessment)
 
 	// Generate user-specific recommendations
-	assessment.Recommendations = generateUserRecommendations(assessment, userID)
+	assessment.Recommendations = _generateUserRecommendations(assessment, userID)
 
 	// Publish assessment completion event
 	s.publishRGEvent("responsible_gaming.user_assessment.completed", assessment)
@@ -91,7 +91,7 @@ func (s *ResponsibleGamingService) GetUserResponsibleGamingStatus(ctx context.Co
 // SetSelfExclusion sets self-exclusion for a user
 func (s *ResponsibleGamingService) SetSelfExclusion(ctx context.Context, userID string, duration string, reason string) error {
 	// In a real implementation, this would update the database
-	endDate := calculateEndDate(duration)
+	endDate := _calculateEndDate(duration)
 
 	record := SelfExclusionRecord{
 		ID:        generateID(),

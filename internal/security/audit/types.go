@@ -29,18 +29,21 @@ func NewSecurityAuditService(eventBus EventBus, config SecurityConfig) *Security
 // assessDataProtection performs data protection assessment
 func (s *SecurityAuditService) assessDataProtection(ctx context.Context) []SecurityFinding {
 	// Implementation stub
+	_ = ctx // Suppress unused parameter warning
 	return []SecurityFinding{}
 }
 
 // assessNetwork performs network security assessment
 func (s *SecurityAuditService) assessNetwork(ctx context.Context) []SecurityFinding {
 	// Implementation stub
+	_ = ctx // Suppress unused parameter warning
 	return []SecurityFinding{}
 }
 
 // assessApplication performs application security assessment
 func (s *SecurityAuditService) assessApplication(ctx context.Context) []SecurityFinding {
 	// Implementation stub
+	_ = ctx // Suppress unused parameter warning
 	return []SecurityFinding{}
 }
 
@@ -50,7 +53,7 @@ func (s *SecurityAuditService) assessInfrastructure(ctx context.Context) []Secur
 	return []SecurityFinding{}
 }
 
-// assessCompliance performs compliance assessment
+// assessCompliance performs compliance security assessment
 func (s *SecurityAuditService) assessCompliance(ctx context.Context) []SecurityFinding {
 	// Implementation stub
 	return []SecurityFinding{}

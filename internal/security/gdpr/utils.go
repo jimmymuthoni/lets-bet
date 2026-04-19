@@ -134,6 +134,7 @@ func generateGDPRRecommendations(assessment *GDPRCompliance) []string {
 
 // generateUserRecommendations generates user-specific recommendations
 func generateUserRecommendations(assessment *GDPRCompliance, userID string) []string {
+	_ = userID // Suppress unused parameter warning
 	var recommendations []string
 
 	// Check if user needs to update consents
@@ -167,14 +168,14 @@ func generateUserRecommendations(assessment *GDPRCompliance, userID string) []st
 }
 
 // getUserDataProcessing gets user's data processing activities
-func getUserDataProcessing(ctx context.Context, userID string) []DataProcessing {
+func getUserDataProcessing(_ context.Context, _ string) []DataProcessing {
 	// In a real implementation, this would query the database
 	// For now, return empty slice
 	return []DataProcessing{}
 }
 
 // getUserDataSubjects gets user's data subject information
-func getUserDataSubjects(ctx context.Context, userID string) []DataSubject {
+func getUserDataSubjects(_ context.Context, userID string) []DataSubject {
 	// In a real implementation, this would query the database
 	// For now, return empty slice
 	return []DataSubject{}
@@ -215,6 +216,8 @@ func CheckConsentExpiry(consentRecord ConsentRecord) bool {
 
 // GenerateDSARReport generates a data subject access request report
 func GenerateDSARReport(ctx context.Context, userID string) (map[string]any, error) {
+	_ = ctx    // Suppress unused parameter warning
+	_ = userID // Suppress unused parameter warning
 	// In a real implementation, this would generate a comprehensive report
 	report := map[string]any{
 		"user_id":       userID,

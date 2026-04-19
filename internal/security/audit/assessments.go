@@ -67,8 +67,8 @@ func assessAuthorization(ctx context.Context) []SecurityFinding {
 	return findings
 }
 
-// assessDataProtection performs data protection security audit
-func assessDataProtection(ctx context.Context, config SecurityConfig) []SecurityFinding {
+// _assessDataProtection performs data protection security audit
+func _assessDataProtection(ctx context.Context, config SecurityConfig) []SecurityFinding {
 	_ = ctx // Use context to avoid unused parameter warning
 	var findings []SecurityFinding
 
@@ -107,30 +107,8 @@ func assessDataProtection(ctx context.Context, config SecurityConfig) []Security
 	return findings
 }
 
-// assessNetwork performs network security audit
-func assessNetwork(ctx context.Context) []SecurityFinding {
-	_ = ctx // Use context to avoid unused parameter warning
-	var findings []SecurityFinding
-
-	// Check for HTTPS enforcement
-	findings = append(findings, SecurityFinding{
-		ID:             generateID(),
-		Title:          "HTTPS Enforcement",
-		Description:    "Verify HTTPS is enforced for all connections",
-		Severity:       SeverityHigh,
-		Category:       CategoryNetwork,
-		Impact:         "Risk of man-in-the-middle attacks",
-		Recommendation: "Implement HSTS and redirect all HTTP to HTTPS",
-		CVSSScore:      7.0,
-		Discovered:     time.Now(),
-		Status:         FindingStatusOpen,
-	})
-
-	return findings
-}
-
-// assessApplication performs application security audit
-func assessApplication(ctx context.Context) []SecurityFinding {
+// _assessApplication performs application security audit
+func _assessApplication(ctx context.Context) []SecurityFinding {
 	_ = ctx // Use context to avoid unused parameter warning
 	var findings []SecurityFinding
 
@@ -165,8 +143,30 @@ func assessApplication(ctx context.Context) []SecurityFinding {
 	return findings
 }
 
-// assessInfrastructure performs infrastructure security audit
-func assessInfrastructure(ctx context.Context) []SecurityFinding {
+// _assessNetwork performs network security audit
+func _assessNetwork(ctx context.Context) []SecurityFinding {
+	_ = ctx // Use context to avoid unused parameter warning
+	var findings []SecurityFinding
+
+	// Check for HTTPS enforcement
+	findings = append(findings, SecurityFinding{
+		ID:             generateID(),
+		Title:          "HTTPS Enforcement",
+		Description:    "Verify HTTPS is enforced for all connections",
+		Severity:       SeverityHigh,
+		Category:       CategoryNetwork,
+		Impact:         "Risk of man-in-the-middle attacks",
+		Recommendation: "Implement HSTS and redirect all HTTP to HTTPS",
+		CVSSScore:      7.0,
+		Discovered:     time.Now(),
+		Status:         FindingStatusOpen,
+	})
+
+	return findings
+}
+
+// _assessInfrastructure performs infrastructure security audit
+func _assessInfrastructure(ctx context.Context) []SecurityFinding {
 	_ = ctx // Use context to avoid unused parameter warning
 	var findings []SecurityFinding
 
@@ -187,8 +187,8 @@ func assessInfrastructure(ctx context.Context) []SecurityFinding {
 	return findings
 }
 
-// assessCompliance performs compliance audit
-func assessCompliance(ctx context.Context) []SecurityFinding {
+// _assessCompliance performs compliance security audit
+func _assessCompliance(ctx context.Context) []SecurityFinding {
 	_ = ctx // Use context to avoid unused parameter warning
 	var findings []SecurityFinding
 

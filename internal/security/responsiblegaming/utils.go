@@ -14,8 +14,8 @@ func generateID() string {
 	return fmt.Sprintf("%x", b)
 }
 
-// calculateEndDate calculates end date based on duration string
-func calculateEndDate(duration string) time.Time {
+// _calculateEndDate calculates end date based on duration string
+func _calculateEndDate(duration string) time.Time {
 	now := time.Now()
 
 	switch duration {
@@ -34,8 +34,8 @@ func calculateEndDate(duration string) time.Time {
 	}
 }
 
-// calculateComplianceScore calculates overall compliance score
-func calculateComplianceScore(assessment *ResponsibleGaming) float64 {
+// _calculateComplianceScore calculates overall compliance score
+func _calculateComplianceScore(assessment *ResponsibleGaming) float64 {
 	score := 100.0
 
 	// Deduct points for violations
@@ -71,8 +71,8 @@ func calculateComplianceScore(assessment *ResponsibleGaming) float64 {
 	return score
 }
 
-// calculateUserComplianceScore calculates compliance score for a specific user
-func calculateUserComplianceScore(assessment *ResponsibleGaming) float64 {
+// _calculateUserComplianceScore calculates compliance score for a specific user
+func _calculateUserComplianceScore(assessment *ResponsibleGaming) float64 {
 	score := 100.0
 
 	// Check if user has active self-exclusion
@@ -116,8 +116,8 @@ func calculateUserComplianceScore(assessment *ResponsibleGaming) float64 {
 	return score
 }
 
-// generateRGRecommendations generates responsible gaming recommendations
-func generateRGRecommendations(assessment *ResponsibleGaming) []string {
+// _generateRGRecommendations generates responsible gaming recommendations
+func _generateRGRecommendations(assessment *ResponsibleGaming) []string {
 	var recommendations []string
 
 	// Add recommendations based on violations
@@ -140,8 +140,8 @@ func generateRGRecommendations(assessment *ResponsibleGaming) []string {
 	return recommendations
 }
 
-// generateUserRecommendations generates user-specific recommendations
-func generateUserRecommendations(assessment *ResponsibleGaming, userID string) []string {
+// _generateUserRecommendations generates user-specific recommendations
+func _generateUserRecommendations(assessment *ResponsibleGaming, userID string) []string {
 	var recommendations []string
 
 	// Check if user needs to set limits
@@ -172,50 +172,50 @@ func generateUserRecommendations(assessment *ResponsibleGaming, userID string) [
 	return recommendations
 }
 
-// getUserSelfExclusion gets user's self-exclusion records
-func getUserSelfExclusion(ctx context.Context, userID string) []SelfExclusionRecord {
+// _getUserSelfExclusion gets user's self-exclusion records
+func _getUserSelfExclusion(ctx context.Context, userID string) []SelfExclusionRecord {
 	// In a real implementation, this would query the database
 	// For now, return empty slice
 	return []SelfExclusionRecord{}
 }
 
-// getUserDepositLimits gets user's deposit limits
-func getUserDepositLimits(ctx context.Context, userID string) []DepositLimit {
+// _getUserDepositLimits gets user's deposit limits
+func _getUserDepositLimits(ctx context.Context, userID string) []DepositLimit {
 	// In a real implementation, this would query the database
 	// For now, return empty slice
 	return []DepositLimit{}
 }
 
-// getUserBettingLimits gets user's betting limits
-func getUserBettingLimits(ctx context.Context, userID string) []BettingLimit {
+// _getUserBettingLimits gets user's betting limits
+func _getUserBettingLimits(ctx context.Context, userID string) []BettingLimit {
 	// In a real implementation, this would query the database
 	// For now, return empty slice
 	return []BettingLimit{}
 }
 
-// getUserTimeLimits gets user's time limits
-func getUserTimeLimits(ctx context.Context, userID string) []TimeLimit {
+// _getUserTimeLimits gets user's time limits
+func _getUserTimeLimits(ctx context.Context, userID string) []TimeLimit {
 	// In a real implementation, this would query the database
 	// For now, return empty slice
 	return []TimeLimit{}
 }
 
-// getUserCoolingOffPeriods gets user's cooling off periods
-func getUserCoolingOffPeriods(ctx context.Context, userID string) []CoolingOffRecord {
+// _getUserCoolingOffPeriods gets user's cooling off periods
+func _getUserCoolingOffPeriods(ctx context.Context, userID string) []CoolingOffRecord {
 	// In a real implementation, this would query the database
 	// For now, return empty slice
 	return []CoolingOffRecord{}
 }
 
-// getUserInterventions gets user's intervention records
-func getUserInterventions(ctx context.Context, userID string) []Intervention {
+// _getUserInterventions gets user's intervention records
+func _getUserInterventions(ctx context.Context, userID string) []Intervention {
 	// In a real implementation, this would query the database
 	// For now, return empty slice
 	return []Intervention{}
 }
 
-// getUserViolations gets user's violation records
-func getUserViolations(ctx context.Context, userID string) []RGViolation {
+// _getUserViolations gets user's violation records
+func _getUserViolations(ctx context.Context, userID string) []RGViolation {
 	// In a real implementation, this would query the database
 	// For now, return empty slice
 	return []RGViolation{}

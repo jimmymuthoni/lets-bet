@@ -7,8 +7,8 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// assessSelfExclusion assesses self-exclusion records
-func assessSelfExclusion(ctx context.Context) []SelfExclusionRecord {
+// _assessSelfExclusion assesses self-exclusion records
+func _assessSelfExclusion(ctx context.Context) []SelfExclusionRecord {
 	_ = ctx // Use context to avoid unused parameter warning
 	return []SelfExclusionRecord{
 		{
@@ -32,8 +32,8 @@ func assessSelfExclusion(ctx context.Context) []SelfExclusionRecord {
 	}
 }
 
-// assessDepositLimits assesses deposit limit settings
-func assessDepositLimits(ctx context.Context) []DepositLimit {
+// _assessDepositLimits assesses deposit limit records
+func _assessDepositLimits(ctx context.Context) []DepositLimit {
 	_ = ctx // Use context to avoid unused parameter warning
 	return []DepositLimit{
 		{
@@ -59,8 +59,8 @@ func assessDepositLimits(ctx context.Context) []DepositLimit {
 	}
 }
 
-// assessBettingLimits assesses betting limit settings
-func assessBettingLimits(ctx context.Context) []BettingLimit {
+// _assessBettingLimits assesses betting limit records
+func _assessBettingLimits(ctx context.Context) []BettingLimit {
 	_ = ctx // Use context to avoid unused parameter warning
 	return []BettingLimit{
 		{
@@ -86,8 +86,8 @@ func assessBettingLimits(ctx context.Context) []BettingLimit {
 	}
 }
 
-// assessTimeLimits assesses time limit settings
-func assessTimeLimits(ctx context.Context) []TimeLimit {
+// _assessTimeLimits assesses time limit records
+func _assessTimeLimits(ctx context.Context) []TimeLimit {
 	_ = ctx // Use context to avoid unused parameter warning
 	return []TimeLimit{
 		{
@@ -113,8 +113,8 @@ func assessTimeLimits(ctx context.Context) []TimeLimit {
 	}
 }
 
-// assessCoolingOffPeriods assesses cooling off period records
-func assessCoolingOffPeriods(ctx context.Context) []CoolingOffRecord {
+// _assessCoolingOffPeriods assesses cooling off period records
+func _assessCoolingOffPeriods(ctx context.Context) []CoolingOffRecord {
 	_ = ctx // Use context to avoid unused parameter warning
 	return []CoolingOffRecord{
 		{
@@ -138,8 +138,8 @@ func assessCoolingOffPeriods(ctx context.Context) []CoolingOffRecord {
 	}
 }
 
-// assessInterventions assesses intervention records
-func assessInterventions(ctx context.Context) []Intervention {
+// _assessInterventions assesses intervention records
+func _assessInterventions(ctx context.Context) []Intervention {
 	_ = ctx // Use context to avoid unused parameter warning
 	return []Intervention{
 		{
@@ -165,8 +165,8 @@ func assessInterventions(ctx context.Context) []Intervention {
 	}
 }
 
-// assessEducation assesses educational materials
-func assessEducation(ctx context.Context) []EducationMaterial {
+// _assessEducation assesses education materials
+func _assessEducation(ctx context.Context) []EducationMaterial {
 	_ = ctx // Use context to avoid unused parameter warning
 	return []EducationMaterial{
 		{
@@ -192,8 +192,8 @@ func assessEducation(ctx context.Context) []EducationMaterial {
 	}
 }
 
-// assessRGViolations assesses responsible gaming violations
-func assessRGViolations(ctx context.Context) []RGViolation {
+// _assessViolations assesses responsible gaming violations
+func _assessViolations(ctx context.Context) []RGViolation {
 	_ = ctx // Use context to avoid unused parameter warning
 	return []RGViolation{
 		{
