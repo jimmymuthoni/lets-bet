@@ -3,59 +3,69 @@ package usecase
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/betting-platform/internal/core/domain"
+	"github.com/betting-platform/internal/core/usecase/tax"
+	"github.com/betting-platform/internal/core/usecase/wallet"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 )
 
+// PlaceBet errors.
 var (
-	ErrInsufficientBalance = errors.New("insufficient balance")
-	ErrUserNotEligible     = errors.New("user not eligible to bet")
-	ErrInvalidBet          = errors.New("invalid bet configuration")
-	ErrStakeTooLow         = errors.New("stake below minimum")
-	ErrStakeTooHigh        = errors.New("stake exceeds maximum")
+	ErrUserNotEligible = errors.New("user not eligible to bet")
+	ErrInvalidBet      = errors.New("invalid bet configuration")
+	ErrStakeTooLow     = errors.New("stake below minimum")
+	ErrStakeTooHigh    = errors.New("stake exceeds maximum")
 )
 
-// BetRepository defines the interface for bet persistence
-type BetRepository interface {
-	Create(ctx context.Context, bet *domain.Bet) error
-	GetByID(ctx context.Context, id uuid.UUID) (*domain.Bet, error)
-	UpdateStatus(ctx context.Context, id uuid.UUID, status domain.BetStatus) error
+// BetInserter persists a new bet inside the caller's transaction.
+// It is implemented by the postgres BetRepository against an *sql.Tx.
+type BetInserter interface {
+	InsertTx(ctx context.Context, tx wallet.DBTX, bet *domain.Bet) error
 }
 
-// WalletRepository defines wallet operations with optimistic locking
-type WalletRepository interface {
-	GetByUserID(ctx context.Context, userID uuid.UUID) (*domain.Wallet, error)
-	UpdateBalance(ctx context.Context, wallet *domain.Wallet, tx *domain.Transaction) error
-	CreateTransaction(ctx context.Context, tx *domain.Transaction) error
-}
-
-// UserRepository defines user data operations
+// UserRepository defines user data operations.
 type UserRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.User, error)
 }
 
-// PlaceBetUseCase handles the core bet placement logic
+// PlaceBetUseCase implements the PlaceBet state machine:
+//
+//	validate → reserve funds → persist → (later) settle.
+//
+// The reserve + persist steps run in a single DB transaction so a failure
+// anywhere in the flow never debits a player without a matching bet row.
 type PlaceBetUseCase struct {
-	betRepo    BetRepository
-	walletRepo WalletRepository
-	userRepo   UserRepository
+	bets    BetInserter
+	wallets *wallet.Service
+	users   UserRepository
+	tax     *tax.Engine
+
+	minStake decimal.Decimal
+	maxStake decimal.Decimal
 }
 
+// NewPlaceBetUseCase constructs the usecase with sensible defaults.
 func NewPlaceBetUseCase(
-	betRepo BetRepository,
-	walletRepo WalletRepository,
-	userRepo UserRepository,
+	bets BetInserter,
+	wallets *wallet.Service,
+	users UserRepository,
+	taxEngine *tax.Engine,
 ) *PlaceBetUseCase {
 	return &PlaceBetUseCase{
-		betRepo:    betRepo,
-		walletRepo: walletRepo,
-		userRepo:   userRepo,
+		bets:     bets,
+		wallets:  wallets,
+		users:    users,
+		tax:      taxEngine,
+		minStake: decimal.NewFromInt(10),
+		maxStake: decimal.NewFromInt(100000),
 	}
 }
 
+// PlaceBetInput is the input contract for [PlaceBetUseCase.Execute].
 type PlaceBetInput struct {
 	UserID      uuid.UUID
 	BetType     domain.BetType
@@ -66,138 +76,103 @@ type PlaceBetInput struct {
 	CountryCode string
 }
 
-// Execute places a bet with full transactional integrity
-func (uc *PlaceBetUseCase) Execute(ctx context.Context, input PlaceBetInput) (*domain.Bet, error) {
-	// 1. Validate user eligibility
-	user, err := uc.userRepo.GetByID(ctx, input.UserID)
+// Execute runs the bet placement state machine.
+func (uc *PlaceBetUseCase) Execute(ctx context.Context, in PlaceBetInput) (*domain.Bet, error) {
+	// 1. Validate user eligibility.
+	user, err := uc.users.GetByID(ctx, in.UserID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load user: %w", err)
 	}
-	
 	if !user.CanPlaceBet() {
 		return nil, ErrUserNotEligible
 	}
-	
-	// 2. Validate bet configuration
-	if err := uc.validateBet(input); err != nil {
+
+	// 2. Validate bet shape.
+	if err := uc.validate(in); err != nil {
 		return nil, err
 	}
-	
-	// 3. Calculate odds and potential win
-	totalOdds := uc.calculateTotalOdds(input.BetType, input.Selections)
-	potentialWin := input.Stake.Mul(totalOdds)
-	
-	// 4. Create bet entity
+
+	// 3. Apply stake tax (collected up front).
+	stakeBreak := uc.tax.ApplyStakeTax(in.CountryCode, in.Stake)
+
+	// 4. Compute odds and potential win from the post-tax net stake, so the
+	// advertised odds apply to the actual money at risk.
+	totalOdds := uc.calculateTotalOdds(in.BetType, in.Selections)
+	potentialWin := stakeBreak.NetStake.Mul(totalOdds).Round(2)
+
 	bet := &domain.Bet{
 		ID:           uuid.New(),
-		UserID:       input.UserID,
-		CountryCode:  input.CountryCode,
-		BetType:      input.BetType,
-		Stake:        input.Stake,
+		UserID:       in.UserID,
+		CountryCode:  in.CountryCode,
+		BetType:      in.BetType,
+		Stake:        in.Stake,
 		Currency:     user.Currency,
 		PotentialWin: potentialWin,
 		TotalOdds:    totalOdds,
 		Status:       domain.BetStatusPending,
 		ActualWin:    decimal.Zero,
-		Selections:   input.Selections,
-		PlacedAt:     time.Now(),
-		IPAddress:    input.IPAddress,
-		DeviceID:     input.DeviceID,
-		TaxAmount:    decimal.Zero,
-		TaxPaid:      false,
+		Selections:   in.Selections,
+		PlacedAt:     time.Now().UTC(),
+		IPAddress:    in.IPAddress,
+		DeviceID:     in.DeviceID,
+		TaxAmount:    stakeBreak.StakeTax,
+		TaxPaid:      true,
 	}
-	
-	// 5. Deduct stake from wallet (atomic operation)
-	wallet, err := uc.walletRepo.GetByUserID(ctx, input.UserID)
+
+	// 5. Reserve funds + persist bet atomically.
+	dbTx, err := uc.wallets.DB().BeginTx(ctx, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("begin tx: %w", err)
 	}
-	
-	if !wallet.CanWithdraw(input.Stake) {
-		return nil, ErrInsufficientBalance
-	}
-	
-	// Create transaction record
-	tx := &domain.Transaction{
-		ID:            uuid.New(),
-		WalletID:      wallet.ID,
-		UserID:        input.UserID,
+	defer func() { _ = dbTx.Rollback() }()
+
+	if _, err := uc.wallets.ApplyTx(ctx, dbTx, wallet.Movement{
+		UserID:        in.UserID,
+		Amount:        in.Stake.Neg(), // debit the gross stake
 		Type:          domain.TransactionTypeBetPlaced,
-		Amount:        input.Stake.Neg(), // Negative for debit
-		Currency:      user.Currency,
-		BalanceBefore: wallet.Balance,
-		BalanceAfter:  wallet.Balance.Sub(input.Stake),
 		ReferenceID:   &bet.ID,
 		ReferenceType: "BET",
-		Status:        domain.TransactionStatusCompleted,
-		Description:   "Bet placed",
-		CreatedAt:     time.Now(),
-		CountryCode:   input.CountryCode,
-	}
-	
-	now := time.Now()
-	tx.CompletedAt = &now
-	
-	// Update wallet balance
-	wallet.Balance = wallet.Balance.Sub(input.Stake)
-	wallet.Version++ // Optimistic locking
-	
-	// 6. Persist bet and wallet update atomically
-	if err := uc.walletRepo.UpdateBalance(ctx, wallet, tx); err != nil {
+		Description:   fmt.Sprintf("bet %s", bet.ID),
+		CountryCode:   in.CountryCode,
+	}); err != nil {
 		return nil, err
 	}
-	
-	if err := uc.betRepo.Create(ctx, bet); err != nil {
-		// In production, this would trigger a rollback
-		return nil, err
+
+	if err := uc.bets.InsertTx(ctx, dbTx, bet); err != nil {
+		return nil, fmt.Errorf("insert bet: %w", err)
 	}
-	
+
+	if err := dbTx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit: %w", err)
+	}
+
 	return bet, nil
 }
 
-func (uc *PlaceBetUseCase) validateBet(input PlaceBetInput) error {
-	// Minimum stake (e.g., KES 10)
-	minStake := decimal.NewFromInt(10)
-	if input.Stake.LessThan(minStake) {
+func (uc *PlaceBetUseCase) validate(in PlaceBetInput) error {
+	if in.Stake.LessThan(uc.minStake) {
 		return ErrStakeTooLow
 	}
-	
-	// Maximum stake (e.g., KES 100,000)
-	maxStake := decimal.NewFromInt(100000)
-	if input.Stake.GreaterThan(maxStake) {
+	if in.Stake.GreaterThan(uc.maxStake) {
 		return ErrStakeTooHigh
 	}
-	
-	// Validate selections
-	if len(input.Selections) == 0 {
+	if len(in.Selections) == 0 {
 		return ErrInvalidBet
 	}
-	
-	if input.BetType == domain.BetTypeSingle && len(input.Selections) != 1 {
+	if in.BetType == domain.BetTypeSingle && len(in.Selections) != 1 {
 		return ErrInvalidBet
 	}
-	
 	return nil
 }
 
 func (uc *PlaceBetUseCase) calculateTotalOdds(betType domain.BetType, selections []domain.Selection) decimal.Decimal {
-	if len(selections) == 0 {
-		return decimal.NewFromInt(1)
-	}
-	
 	switch betType {
 	case domain.BetTypeSingle:
-		return selections[0].Odds
-	case domain.BetTypeMulti:
-		// Multiply all odds together
-		total := decimal.NewFromInt(1)
-		for _, sel := range selections {
-			total = total.Mul(sel.Odds)
+		if len(selections) == 0 {
+			return decimal.NewFromInt(1)
 		}
-		return total
-	case domain.BetTypeSystem:
-		// Simplified: return average for now
-		// Real implementation would calculate combinations
+		return selections[0].Odds
+	case domain.BetTypeMulti, domain.BetTypeSystem:
 		total := decimal.NewFromInt(1)
 		for _, sel := range selections {
 			total = total.Mul(sel.Odds)
