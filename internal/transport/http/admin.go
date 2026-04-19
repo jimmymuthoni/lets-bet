@@ -2,25 +2,13 @@ package http
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/betting-platform/internal/admin"
 )
-
-// AdminHandler handles admin dashboard HTTP requests
-type AdminHandler struct {
-	adminService *admin.AdminService
-}
-
-// NewAdminHandler creates a new admin handler
-func NewAdminHandler(adminService *admin.AdminService) *AdminHandler {
-	return &AdminHandler{
-		adminService: adminService,
-	}
-}
 
 // GetDashboardData returns comprehensive dashboard data
 func (h *AdminHandler) GetDashboardData(w http.ResponseWriter, r *http.Request) {
@@ -32,7 +20,12 @@ func (h *AdminHandler) GetDashboardData(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	WriteJSON(w, dashboardData, http.StatusOK)
+	response := &DashboardResponse{
+		Success: true,
+		Data:    dashboardData,
+	}
+
+	WriteJSON(w, response, http.StatusOK)
 }
 
 // GetUserManagementData returns user management data with pagination
@@ -42,6 +35,10 @@ func (h *AdminHandler) GetUserManagementData(w http.ResponseWriter, r *http.Requ
 	// Parse query parameters
 	limitStr := r.URL.Query().Get("limit")
 	offsetStr := r.URL.Query().Get("offset")
+	search := r.URL.Query().Get("search")
+	status := r.URL.Query().Get("status")
+	sortBy := r.URL.Query().Get("sort_by")
+	sortDir := r.URL.Query().Get("sort_dir")
 
 	limit := 20 // default
 	offset := 0 // default
@@ -58,296 +55,298 @@ func (h *AdminHandler) GetUserManagementData(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
-	users, err := h.adminService.GetUserManagementData(ctx, limit, offset)
+	request := &admin.UserManagementRequest{
+		Limit:   limit,
+		Offset:  offset,
+		Search:  search,
+		Status:  status,
+		SortBy:  sortBy,
+		SortDir: sortDir,
+	}
+
+	userData, err := h.adminService.GetUserManagementData(ctx, request)
 	if err != nil {
 		WriteError(w, err, "Failed to get user management data", http.StatusInternalServerError)
 		return
 	}
 
-	WriteJSON(w, users, http.StatusOK)
+	response := &UserManagementResponse{
+		Success: true,
+		Data:    userData,
+	}
+
+	WriteJSON(w, response, http.StatusOK)
 }
 
-// SuspendUser suspends a user account
-func (h *AdminHandler) SuspendUser(w http.ResponseWriter, r *http.Request) {
+// GetUserDetails returns detailed information about a specific user
+func (h *AdminHandler) GetUserDetails(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Extract user ID from URL path
-	userID := extractUserIDFromPath(r.URL.Path)
-	if userID == "" {
-		WriteError(w, fmt.Errorf("user ID is required"), "User ID is required", http.StatusBadRequest)
+	path := strings.TrimPrefix(r.URL.Path, "/api/admin/users/")
+	if path == "" {
+		WriteError(w, nil, "User ID is required", http.StatusBadRequest)
 		return
 	}
 
-	// Parse request body
-	var req struct {
-		Reason string `json:"reason"`
+	userDetails, err := h.adminService.GetUserDetails(ctx, path)
+	if err != nil {
+		WriteError(w, err, "Failed to get user details", http.StatusNotFound)
+		return
 	}
 
+	WriteJSON(w, map[string]interface{}{
+		"success": true,
+		"data":    userDetails,
+	}, http.StatusOK)
+}
+
+// PerformUserAction performs an action on a user (ban, unban, verify, etc.)
+func (h *AdminHandler) PerformUserAction(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var req UserActionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		WriteError(w, err, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	err := h.adminService.SuspendUser(ctx, userID, req.Reason)
-	if err != nil {
-		WriteError(w, err, "Failed to suspend user", http.StatusInternalServerError)
+	// Validate request
+	if req.UserID == "" || req.Action == "" {
+		WriteError(w, nil, "User ID and action are required", http.StatusBadRequest)
 		return
 	}
 
-	WriteJSON(w, map[string]string{"message": "User suspended successfully"}, http.StatusOK)
+	actionReq := &admin.UserActionRequest{
+		UserID: req.UserID,
+		Action: req.Action,
+		Reason: req.Reason,
+	}
+
+	err := h.adminService.PerformUserAction(ctx, actionReq)
+	if err != nil {
+		WriteError(w, err, "Failed to perform user action", http.StatusInternalServerError)
+		return
+	}
+
+	response := &UserActionResponse{
+		Success: true,
+		Message: "User action completed successfully",
+		UserID:  req.UserID,
+	}
+
+	WriteJSON(w, response, http.StatusOK)
 }
 
-// UnsuspendUser unsuspends a user account
-func (h *AdminHandler) UnsuspendUser(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	// Extract user ID from URL path
-	userID := extractUserIDFromPath(r.URL.Path)
-	if userID == "" {
-		WriteError(w, fmt.Errorf("user ID is required"), "User ID is required", http.StatusBadRequest)
-		return
-	}
-
-	err := h.adminService.UnsuspendUser(ctx, userID)
-	if err != nil {
-		WriteError(w, err, "Failed to unsuspend user", http.StatusInternalServerError)
-		return
-	}
-
-	WriteJSON(w, map[string]string{"message": "User unsuspended successfully"}, http.StatusOK)
-}
-
-// GetRevenueAnalytics returns detailed revenue analytics
-func (h *AdminHandler) GetRevenueAnalytics(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	// Parse query parameters
-	period := r.URL.Query().Get("period")
-	if period == "" {
-		period = "30d" // default to 30 days
-	}
-
-	// Get dashboard data and extract revenue metrics
-	dashboardData, err := h.adminService.GetDashboardData(ctx)
-	if err != nil {
-		WriteError(w, err, "Failed to get revenue analytics", http.StatusInternalServerError)
-		return
-	}
-
-	// Filter revenue data based on period
-	revenueData := filterRevenueByPeriod(dashboardData.RevenueMetrics, period)
-
-	WriteJSON(w, revenueData, http.StatusOK)
-}
-
-// GetBettingAnalytics returns detailed betting analytics
-func (h *AdminHandler) GetBettingAnalytics(w http.ResponseWriter, r *http.Request) {
+// GetBettingMetrics returns betting metrics and analytics
+func (h *AdminHandler) GetBettingMetrics(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Parse query parameters
-	sport := r.URL.Query().Get("sport")
-	period := r.URL.Query().Get("period")
-	if period == "" {
-		period = "24h" // default to 24 hours
+	timeRange := r.URL.Query().Get("time_range")
+	fromDateStr := r.URL.Query().Get("from_date")
+	toDateStr := r.URL.Query().Get("to_date")
+
+	var fromDate, toDate *time.Time
+	if fromDateStr != "" {
+		if parsed, err := time.Parse(time.RFC3339, fromDateStr); err == nil {
+			fromDate = &parsed
+		}
+	}
+	if toDateStr != "" {
+		if parsed, err := time.Parse(time.RFC3339, toDateStr); err == nil {
+			toDate = &parsed
+		}
 	}
 
-	// Get dashboard data and extract betting metrics
-	dashboardData, err := h.adminService.GetDashboardData(ctx)
+	request := &admin.BettingMetricsRequest{
+		TimeRange: timeRange,
+		FromDate:  fromDate,
+		ToDate:    toDate,
+	}
+
+	metrics, err := h.adminService.GetBettingMetrics(ctx, request)
 	if err != nil {
-		WriteError(w, err, "Failed to get betting analytics", http.StatusInternalServerError)
+		WriteError(w, err, "Failed to get betting metrics", http.StatusInternalServerError)
 		return
 	}
 
-	// Filter betting data based on sport and period
-	bettingData := filterBettingData(dashboardData.BettingMetrics, sport, period)
-
-	WriteJSON(w, bettingData, http.StatusOK)
+	WriteJSON(w, map[string]interface{}{
+		"success": true,
+		"data":    metrics,
+	}, http.StatusOK)
 }
 
-// GetFinancialAnalytics returns detailed financial analytics
-func (h *AdminHandler) GetFinancialAnalytics(w http.ResponseWriter, r *http.Request) {
+// GetFinancialReports returns financial reports and analytics
+func (h *AdminHandler) GetFinancialReports(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Parse query parameters
-	currency := r.URL.Query().Get("currency")
-	if currency == "" {
-		currency = "KES" // default currency
+	reportType := r.URL.Query().Get("report_type")
+	timeRange := r.URL.Query().Get("time_range")
+	fromDateStr := r.URL.Query().Get("from_date")
+	toDateStr := r.URL.Query().Get("to_date")
+
+	var fromDate, toDate *time.Time
+	if fromDateStr != "" {
+		if parsed, err := time.Parse(time.RFC3339, fromDateStr); err == nil {
+			fromDate = &parsed
+		}
+	}
+	if toDateStr != "" {
+		if parsed, err := time.Parse(time.RFC3339, toDateStr); err == nil {
+			toDate = &parsed
+		}
 	}
 
-	// Get dashboard data and extract financial metrics
-	dashboardData, err := h.adminService.GetDashboardData(ctx)
+	request := &admin.FinancialReportRequest{
+		ReportType: reportType,
+		TimeRange:  timeRange,
+		FromDate:   fromDate,
+		ToDate:     toDate,
+	}
+
+	report, err := h.adminService.GetFinancialReport(ctx, request)
 	if err != nil {
-		WriteError(w, err, "Failed to get financial analytics", http.StatusInternalServerError)
+		WriteError(w, err, "Failed to get financial report", http.StatusInternalServerError)
 		return
 	}
 
-	// Filter financial data based on currency
-	financialData := filterFinancialData(dashboardData.FinancialStats, currency)
-
-	WriteJSON(w, financialData, http.StatusOK)
+	WriteJSON(w, map[string]interface{}{
+		"success": true,
+		"data":    report,
+	}, http.StatusOK)
 }
 
 // GetSystemHealth returns system health status
 func (h *AdminHandler) GetSystemHealth(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// Get dashboard data and extract system health
-	dashboardData, err := h.adminService.GetDashboardData(ctx)
+	health, err := h.adminService.GetSystemHealth(ctx)
 	if err != nil {
 		WriteError(w, err, "Failed to get system health", http.StatusInternalServerError)
 		return
 	}
 
-	WriteJSON(w, dashboardData.SystemHealth, http.StatusOK)
+	WriteJSON(w, map[string]interface{}{
+		"success": true,
+		"data":    health,
+	}, http.StatusOK)
 }
 
-// GetActivityLog returns recent activity log
-func (h *AdminHandler) GetActivityLog(w http.ResponseWriter, r *http.Request) {
+// GetSystemConfig returns system configuration
+func (h *AdminHandler) GetSystemConfig(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	config, err := h.adminService.GetSystemConfig(ctx)
+	if err != nil {
+		WriteError(w, err, "Failed to get system config", http.StatusInternalServerError)
+		return
+	}
+
+	response := &SystemConfigResponse{
+		Success: true,
+		Config:  config,
+	}
+
+	WriteJSON(w, response, http.StatusOK)
+}
+
+// UpdateSystemConfig updates system configuration
+func (h *AdminHandler) UpdateSystemConfig(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var req SystemConfigRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteError(w, err, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	err := h.adminService.UpdateSystemConfig(ctx, req.Config)
+	if err != nil {
+		WriteError(w, err, "Failed to update system config", http.StatusInternalServerError)
+		return
+	}
+
+	response := &SystemConfigResponse{
+		Success: true,
+		Message: "System configuration updated successfully",
+		Config:  req.Config,
+	}
+
+	WriteJSON(w, response, http.StatusOK)
+}
+
+// GetAuditLogs returns audit logs with filtering
+func (h *AdminHandler) GetAuditLogs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Parse query parameters
 	limitStr := r.URL.Query().Get("limit")
-	typeFilter := r.URL.Query().Get("type")
-	statusFilter := r.URL.Query().Get("status")
+	offsetStr := r.URL.Query().Get("offset")
+	action := r.URL.Query().Get("action")
+	userID := r.URL.Query().Get("user_id")
+	fromDateStr := r.URL.Query().Get("from_date")
+	toDateStr := r.URL.Query().Get("to_date")
 
 	limit := 50 // default
+	offset := 0 // default
+
 	if limitStr != "" {
 		if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 {
 			limit = parsedLimit
 		}
 	}
 
-	// Get dashboard data and extract recent activity
-	dashboardData, err := h.adminService.GetDashboardData(ctx)
+	if offsetStr != "" {
+		if parsedOffset, err := strconv.Atoi(offsetStr); err == nil && parsedOffset >= 0 {
+			offset = parsedOffset
+		}
+	}
+
+	var fromDate, toDate *time.Time
+	if fromDateStr != "" {
+		if parsed, err := time.Parse(time.RFC3339, fromDateStr); err == nil {
+			fromDate = &parsed
+		}
+	}
+	if toDateStr != "" {
+		if parsed, err := time.Parse(time.RFC3339, toDateStr); err == nil {
+			toDate = &parsed
+		}
+	}
+
+	request := &admin.AuditLogRequest{
+		Limit:    limit,
+		Offset:   offset,
+		Action:   action,
+		UserID:   userID,
+		FromDate: fromDate,
+		ToDate:   toDate,
+	}
+
+	logs, err := h.adminService.GetAuditLogs(ctx, request)
 	if err != nil {
-		WriteError(w, err, "Failed to get activity log", http.StatusInternalServerError)
+		WriteError(w, err, "Failed to get audit logs", http.StatusInternalServerError)
 		return
 	}
 
-	// Filter activity based on parameters
-	activityData := filterActivityData(dashboardData.RecentActivity, limit, typeFilter, statusFilter)
-
-	WriteJSON(w, activityData, http.StatusOK)
+	WriteJSON(w, map[string]interface{}{
+		"success": true,
+		"data":    logs,
+	}, http.StatusOK)
 }
 
-// GetTopUsers returns top users by various metrics
-func (h *AdminHandler) GetTopUsers(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	// Parse query parameters
-	metric := r.URL.Query().Get("metric")
-	limitStr := r.URL.Query().Get("limit")
-
-	limit := 10 // default
-	if limitStr != "" {
-		if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 {
-			limit = parsedLimit
-		}
-	}
-
-	// Get dashboard data and extract top users
-	dashboardData, err := h.adminService.GetDashboardData(ctx)
-	if err != nil {
-		WriteError(w, err, "Failed to get top users", http.StatusInternalServerError)
-		return
-	}
-
-	// Sort users based on metric
-	topUsers := sortUsersByMetric(dashboardData.TopUsers, metric, limit)
-
-	WriteJSON(w, topUsers, http.StatusOK)
-}
-
-// Helper functions
-
-// extractUserIDFromPath extracts user ID from URL path
-func extractUserIDFromPath(path string) string {
-	parts := strings.Split(path, "/")
-	for i, part := range parts {
-		if part == "users" && i+1 < len(parts) {
-			return parts[i+1]
-		}
-	}
-	return ""
-}
-
-// filterRevenueByPeriod filters revenue data based on period
-func filterRevenueByPeriod(revenue admin.RevenueMetrics, period string) admin.RevenueMetrics {
-	// In a real implementation, this would filter based on the period parameter
-	// For now, return the original data
-	return revenue
-}
-
-// filterBettingData filters betting data based on sport and period
-func filterBettingData(betting admin.BettingMetrics, sport, period string) admin.BettingMetrics {
-	// In a real implementation, this would filter based on sport and period
-	// For now, return the original data
-	return betting
-}
-
-// filterFinancialData filters financial data based on currency
-func filterFinancialData(financial admin.FinancialStats, currency string) admin.FinancialStats {
-	// In a real implementation, this would filter based on currency
-	// For now, return the original data
-	return financial
-}
-
-// filterActivityData filters activity data based on parameters
-func filterActivityData(activities []admin.ActivityItem, limit int, typeFilter, statusFilter string) []admin.ActivityItem {
-	var filtered []admin.ActivityItem
-
-	for _, activity := range activities {
-		// Apply type filter
-		if typeFilter != "" && activity.Type != typeFilter {
-			continue
-		}
-
-		// Apply status filter
-		if statusFilter != "" && activity.Status != statusFilter {
-			continue
-		}
-
-		filtered = append(filtered, activity)
-
-		// Apply limit
-		if len(filtered) >= limit {
-			break
-		}
-	}
-
-	return filtered
-}
-
-// sortUsersByMetric sorts users based on the specified metric
-func sortUsersByMetric(users []admin.UserStats, metric string, limit int) []admin.UserStats {
-	// In a real implementation, this would sort users based on the metric
-	// For now, return the top N users
-	if len(users) > limit {
-		return users[:limit]
-	}
-	return users
-}
-
-// RegisterAdminRoutes registers admin routes
-func RegisterAdminRoutes(mux *http.ServeMux, adminHandler *AdminHandler) {
-	// Dashboard routes
-	mux.HandleFunc("/GET/admin/dashboard", adminHandler.GetDashboardData)
-	mux.HandleFunc("/GET/admin/dashboard/overview", adminHandler.GetDashboardData)
-
-	// User management routes
-	mux.HandleFunc("/GET/admin/users", adminHandler.GetUserManagementData)
-	mux.HandleFunc("/POST/admin/users/{userID}/suspend", adminHandler.SuspendUser)
-	mux.HandleFunc("/POST/admin/users/{userID}/unsuspend", adminHandler.UnsuspendUser)
-
-	// Analytics routes
-	mux.HandleFunc("/GET/admin/analytics/revenue", adminHandler.GetRevenueAnalytics)
-	mux.HandleFunc("/GET/admin/analytics/betting", adminHandler.GetBettingAnalytics)
-	mux.HandleFunc("/GET/admin/analytics/financial", adminHandler.GetFinancialAnalytics)
-
-	// System routes
-	mux.HandleFunc("/GET/admin/system/health", adminHandler.GetSystemHealth)
-	mux.HandleFunc("/GET/admin/system/activity", adminHandler.GetActivityLog)
-
-	// Reports routes
-	mux.HandleFunc("/GET/admin/reports/users/top", adminHandler.GetTopUsers)
+// RegisterRoutes registers admin routes
+func (h *AdminHandler) RegisterRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/api/admin/dashboard", h.GetDashboardData)
+	mux.HandleFunc("/api/admin/users", h.GetUserManagementData)
+	mux.HandleFunc("/api/admin/users/", h.GetUserDetails)
+	mux.HandleFunc("/api/admin/users/action", h.PerformUserAction)
+	mux.HandleFunc("/api/admin/betting/metrics", h.GetBettingMetrics)
+	mux.HandleFunc("/api/admin/financial/reports", h.GetFinancialReports)
+	mux.HandleFunc("/api/admin/system/health", h.GetSystemHealth)
+	mux.HandleFunc("/api/admin/system/config", h.GetSystemConfig)
+	mux.HandleFunc("/api/admin/system/config/update", h.UpdateSystemConfig)
+	mux.HandleFunc("/api/admin/audit/logs", h.GetAuditLogs)
 }

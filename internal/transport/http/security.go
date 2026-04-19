@@ -4,9 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
-	"time"
-
-	"github.com/shopspring/decimal"
+	"strings"
 
 	audit "github.com/betting-platform/internal/security/audit"
 	gdpr "github.com/betting-platform/internal/security/gdpr"
@@ -39,33 +37,54 @@ func NewSecurityHandler(
 
 // PerformSecurityAudit performs a comprehensive security audit
 func (h *SecurityHandler) PerformSecurityAudit(w http.ResponseWriter, r *http.Request) {
+	var req SecurityAuditRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteError(w, err, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
 	audit, err := h.auditService.PerformSecurityAudit(r.Context())
 	if err != nil {
 		WriteError(w, err, "Failed to perform security audit", http.StatusInternalServerError)
 		return
 	}
 
-	WriteJSON(w, audit, http.StatusOK)
+	response := &SecurityAuditResponse{
+		Success: true,
+		Data:    audit,
+	}
+
+	WriteJSON(w, response, http.StatusOK)
 }
 
-// GetSecurityMetrics returns security performance metrics
-func (h *SecurityHandler) GetSecurityMetrics(w http.ResponseWriter, r *http.Request) {
-	metrics, err := h.auditService.GetSecurityMetrics(r.Context())
+// GetSecurityAuditHistory returns security audit history
+func (h *SecurityHandler) GetSecurityAuditHistory(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Parse query parameters
+	limitStr := r.URL.Query().Get("limit")
+	limit := 50
+	if limitStr != "" {
+		if parsed, err := strconv.Atoi(limitStr); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+
+	history, err := h.auditService.GetAuditHistory(ctx, limit)
 	if err != nil {
-		WriteError(w, err, "Failed to get security metrics", http.StatusInternalServerError)
+		WriteError(w, err, "Failed to get audit history", http.StatusInternalServerError)
 		return
 	}
 
-	WriteJSON(w, metrics, http.StatusOK)
+	WriteJSON(w, map[string]interface{}{
+		"success": true,
+		"data":    history,
+	}, http.StatusOK)
 }
 
 // PerformPenetrationTest performs a penetration test
 func (h *SecurityHandler) PerformPenetrationTest(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		TestType string   `json:"test_type"`
-		Scope    []string `json:"scope"`
-	}
-
+	var req PenetrationTestRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		WriteError(w, err, "Invalid request body", http.StatusBadRequest)
 		return
@@ -77,273 +96,212 @@ func (h *SecurityHandler) PerformPenetrationTest(w http.ResponseWriter, r *http.
 		return
 	}
 
-	WriteJSON(w, test, http.StatusOK)
-}
-
-// GetPenetrationTestHistory returns penetration test history
-func (h *SecurityHandler) GetPenetrationTestHistory(w http.ResponseWriter, r *http.Request) {
-	limitStr := r.URL.Query().Get("limit")
-	limit := 50 // default
-	if limitStr != "" {
-		if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 {
-			limit = parsedLimit
-		}
+	response := &PenetrationTestResponse{
+		Success: true,
+		Data:    test,
 	}
 
-	tests, err := h.pentestService.GetPenetrationTestHistory(r.Context(), limit)
-	if err != nil {
-		WriteError(w, err, "Failed to get penetration test history", http.StatusInternalServerError)
+	WriteJSON(w, response, http.StatusOK)
+}
+
+// GetPenetrationTestResults returns penetration test results
+func (h *SecurityHandler) GetPenetrationTestResults(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Extract test ID from URL path
+	path := strings.TrimPrefix(r.URL.Path, "/api/security/pentest/results/")
+	if path == "" {
+		WriteError(w, nil, "Test ID is required", http.StatusBadRequest)
 		return
 	}
 
-	WriteJSON(w, tests, http.StatusOK)
-}
-
-// PerformGDPRAssessment performs a GDPR compliance assessment
-func (h *SecurityHandler) PerformGDPRAssessment(w http.ResponseWriter, r *http.Request) {
-	assessment, err := h.gdprService.PerformGDPRAssessment(r.Context())
+	results, err := h.pentestService.GetTestResults(ctx, path)
 	if err != nil {
-		WriteError(w, err, "Failed to perform GDPR assessment", http.StatusInternalServerError)
+		WriteError(w, err, "Failed to get penetration test results", http.StatusNotFound)
 		return
 	}
 
-	WriteJSON(w, assessment, http.StatusOK)
+	WriteJSON(w, map[string]interface{}{
+		"success": true,
+		"data":    results,
+	}, http.StatusOK)
 }
 
-// ProcessDataSubjectRequest processes a data subject request
-func (h *SecurityHandler) ProcessDataSubjectRequest(w http.ResponseWriter, r *http.Request) {
+// ProcessGDPRRequest processes a GDPR request
+func (h *SecurityHandler) ProcessGDPRRequest(w http.ResponseWriter, r *http.Request) {
+	var req GDPRRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteError(w, err, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate request
+	if req.UserID == "" || req.Type == "" {
+		WriteError(w, nil, "User ID and request type are required", http.StatusBadRequest)
+		return
+	}
+
+	err := h.gdprService.ProcessRequest(r.Context(), req)
+	if err != nil {
+		WriteError(w, err, "Failed to process GDPR request", http.StatusInternalServerError)
+		return
+	}
+
+	gdprResponse := &GDPRResponse{
+		Success: true,
+		Data:    req,
+	}
+
+	WriteJSON(w, gdprResponse, http.StatusOK)
+}
+
+// GetGDPRRequestStatus returns GDPR request status
+func (h *SecurityHandler) GetGDPRRequestStatus(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Extract request ID from URL path
+	path := strings.TrimPrefix(r.URL.Path, "/api/security/gdpr/status/")
+	if path == "" {
+		WriteError(w, nil, "Request ID is required", http.StatusBadRequest)
+		return
+	}
+
+	status, err := h.gdprService.GetRequestStatus(ctx, path)
+	if err != nil {
+		WriteError(w, err, "Failed to get GDPR request status", http.StatusNotFound)
+		return
+	}
+
+	WriteJSON(w, map[string]interface{}{
+		"success": true,
+		"data":    status,
+	}, http.StatusOK)
+}
+
+// ProcessResponsibleGamingRequest processes a responsible gaming request
+func (h *SecurityHandler) ProcessResponsibleGamingRequest(w http.ResponseWriter, r *http.Request) {
+	var req ResponsibleGamingRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteError(w, err, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate request
+	if req.UserID == "" || req.Action == "" {
+		WriteError(w, nil, "User ID and action are required", http.StatusBadRequest)
+		return
+	}
+
+	err := h.rgService.ProcessRequest(r.Context(), req)
+	if err != nil {
+		WriteError(w, err, "Failed to process responsible gaming request", http.StatusInternalServerError)
+		return
+	}
+
+	rgResponse := &ResponsibleGamingResponse{
+		Success: true,
+		Data:    req,
+	}
+
+	WriteJSON(w, rgResponse, http.StatusOK)
+}
+
+// GetUserGamingProfile returns user gaming profile
+func (h *SecurityHandler) GetUserGamingProfile(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Extract user ID from URL path
+	path := strings.TrimPrefix(r.URL.Path, "/api/security/responsible-gaming/profile/")
+	if path == "" {
+		WriteError(w, nil, "User ID is required", http.StatusBadRequest)
+		return
+	}
+
+	profile, err := h.rgService.GetUserGamingProfile(ctx, path)
+	if err != nil {
+		WriteError(w, err, "Failed to get user gaming profile", http.StatusNotFound)
+		return
+	}
+
+	WriteJSON(w, map[string]interface{}{
+		"success": true,
+		"data":    profile,
+	}, http.StatusOK)
+}
+
+// SetGamingLimits sets gaming limits for a user
+func (h *SecurityHandler) SetGamingLimits(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		UserID      string `json:"user_id"`
-		RequestType string `json:"request_type"`
+		UserID string         `json:"user_id"`
+		Limits []*GamingLimit `json:"limits"`
 	}
-
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		WriteError(w, err, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	err := h.gdprService.ProcessDataSubjectRequest(r.Context(), req.UserID, req.RequestType)
-	if err != nil {
-		WriteError(w, err, "Failed to process data subject request", http.StatusInternalServerError)
+	// Validate request
+	if req.UserID == "" || len(req.Limits) == 0 {
+		WriteError(w, nil, "User ID and limits are required", http.StatusBadRequest)
 		return
 	}
 
-	WriteJSON(w, map[string]string{"message": "Data subject request processed successfully"}, http.StatusOK)
+	err := h.rgService.SetGamingLimits(r.Context(), req.UserID, req.Limits)
+	if err != nil {
+		WriteError(w, err, "Failed to set gaming limits", http.StatusInternalServerError)
+		return
+	}
+
+	WriteJSON(w, map[string]interface{}{
+		"success": true,
+		"message": "Gaming limits set successfully",
+	}, http.StatusOK)
 }
 
-// RecordDataBreach records a data breach
-func (h *SecurityHandler) RecordDataBreach(w http.ResponseWriter, r *http.Request) {
-	var req gdpr.DataBreach
+// GetSecurityMetrics returns security metrics
+func (h *SecurityHandler) GetSecurityMetrics(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		WriteError(w, err, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	err := h.gdprService.RecordDataBreach(r.Context(), req)
-	if err != nil {
-		WriteError(w, err, "Failed to record data breach", http.StatusInternalServerError)
-		return
-	}
-
-	WriteJSON(w, map[string]string{"message": "Data breach recorded successfully"}, http.StatusOK)
-}
-
-// PerformResponsibleGamingAssessment performs a responsible gaming assessment
-func (h *SecurityHandler) PerformResponsibleGamingAssessment(w http.ResponseWriter, r *http.Request) {
-	assessment, err := h.rgService.PerformResponsibleGamingAssessment(r.Context())
-	if err != nil {
-		WriteError(w, err, "Failed to perform responsible gaming assessment", http.StatusInternalServerError)
-		return
-	}
-
-	WriteJSON(w, assessment, http.StatusOK)
-}
-
-// SetSelfExclusion sets a user's self-exclusion status
-func (h *SecurityHandler) SetSelfExclusion(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		UserID   string `json:"user_id"`
-		Duration string `json:"duration"`
-		Reason   string `json:"reason"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		WriteError(w, err, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	err := h.rgService.SetSelfExclusion(r.Context(), req.UserID, req.Duration, req.Reason)
-	if err != nil {
-		WriteError(w, err, "Failed to set self-exclusion", http.StatusInternalServerError)
-		return
-	}
-
-	WriteJSON(w, map[string]string{"message": "Self-exclusion set successfully"}, http.StatusOK)
-}
-
-// SetDepositLimit sets a user's deposit limit
-func (h *SecurityHandler) SetDepositLimit(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		UserID string          `json:"user_id"`
-		Type   string          `json:"type"`
-		Amount decimal.Decimal `json:"amount"`
-		Period string          `json:"period"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		WriteError(w, err, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	err := h.rgService.SetDepositLimit(r.Context(), req.UserID, req.Type, req.Amount, req.Period)
-	if err != nil {
-		WriteError(w, err, "Failed to set deposit limit", http.StatusInternalServerError)
-		return
-	}
-
-	WriteJSON(w, map[string]string{"message": "Deposit limit set successfully"}, http.StatusOK)
-}
-
-// SetBettingLimit sets a user's betting limit
-func (h *SecurityHandler) SetBettingLimit(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		UserID string          `json:"user_id"`
-		Type   string          `json:"type"`
-		Amount decimal.Decimal `json:"amount"`
-		Period string          `json:"period"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		WriteError(w, err, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	err := h.rgService.SetBettingLimit(r.Context(), req.UserID, req.Type, req.Amount, req.Period)
-	if err != nil {
-		WriteError(w, err, "Failed to set betting limit", http.StatusInternalServerError)
-		return
-	}
-
-	WriteJSON(w, map[string]string{"message": "Betting limit set successfully"}, http.StatusOK)
-}
-
-// SetTimeLimit sets a user's time limit
-func (h *SecurityHandler) SetTimeLimit(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		UserID   string `json:"user_id"`
-		Type     string `json:"type"`
-		Duration string `json:"duration"`
-		Period   string `json:"period"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		WriteError(w, err, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	// Parse duration
-	duration, err := time.ParseDuration(req.Duration)
-	if err != nil {
-		WriteError(w, err, "Invalid duration format", http.StatusBadRequest)
-		return
-	}
-
-	err = h.rgService.SetTimeLimit(r.Context(), req.UserID, req.Type, duration, req.Period)
-	if err != nil {
-		WriteError(w, err, "Failed to set time limit", http.StatusInternalServerError)
-		return
-	}
-
-	WriteJSON(w, map[string]string{"message": "Time limit set successfully"}, http.StatusOK)
-}
-
-// TriggerIntervention triggers an intervention for a user
-func (h *SecurityHandler) TriggerIntervention(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		UserID  string `json:"user_id"`
-		Trigger string `json:"trigger"`
-		Action  string `json:"action"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		WriteError(w, err, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	err := h.rgService.TriggerIntervention(r.Context(), req.UserID, req.Trigger, req.Action)
-	if err != nil {
-		WriteError(w, err, "Failed to trigger intervention", http.StatusInternalServerError)
-		return
-	}
-
-	WriteJSON(w, map[string]string{"message": "Intervention triggered successfully"}, http.StatusOK)
-}
-
-// GetSecurityDashboard returns a comprehensive security dashboard
-func (h *SecurityHandler) GetSecurityDashboard(w http.ResponseWriter, r *http.Request) {
-	// Get security metrics
-	metrics, err := h.auditService.GetSecurityMetrics(r.Context())
+	metrics, err := h.auditService.GetSecurityMetrics(ctx)
 	if err != nil {
 		WriteError(w, err, "Failed to get security metrics", http.StatusInternalServerError)
 		return
 	}
 
-	// Get recent penetration tests
-	tests, err := h.pentestService.GetPenetrationTestHistory(r.Context(), 5)
-	if err != nil {
-		WriteError(w, err, "Failed to get penetration test history", http.StatusInternalServerError)
-		return
-	}
-
-	// Get latest GDPR assessment
-	gdprAssessment, err := h.gdprService.PerformGDPRAssessment(r.Context())
-	if err != nil {
-		WriteError(w, err, "Failed to get GDPR assessment", http.StatusInternalServerError)
-		return
-	}
-
-	// Get latest responsible gaming assessment
-	rgAssessment, err := h.rgService.PerformResponsibleGamingAssessment(r.Context())
-	if err != nil {
-		WriteError(w, err, "Failed to get responsible gaming assessment", http.StatusInternalServerError)
-		return
-	}
-
-	dashboard := map[string]interface{}{
-		"security_metrics":         metrics,
-		"recent_penetration_tests": tests,
-		"gdpr_assessment":          gdprAssessment,
-		"responsible_gaming":       rgAssessment,
-		"generated_at":             time.Now(),
-	}
-
-	WriteJSON(w, dashboard, http.StatusOK)
+	WriteJSON(w, map[string]interface{}{
+		"success": true,
+		"data":    metrics,
+	}, http.StatusOK)
 }
 
-// RegisterSecurityRoutes registers security routes
-func RegisterSecurityRoutes(mux *http.ServeMux, securityHandler *SecurityHandler) {
-	// Security audit endpoints
-	mux.HandleFunc("/security/audit", securityHandler.PerformSecurityAudit)
-	mux.HandleFunc("/security/metrics", securityHandler.GetSecurityMetrics)
+// GetVulnerabilityReport returns vulnerability report
+func (h *SecurityHandler) GetVulnerabilityReport(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 
-	// Penetration testing endpoints
-	mux.HandleFunc("/security/pentest", securityHandler.PerformPenetrationTest)
-	mux.HandleFunc("/security/pentest/history", securityHandler.GetPenetrationTestHistory)
+	// Parse query parameters
+	report, err := h.auditService.GetVulnerabilityReport(ctx)
+	if err != nil {
+		WriteError(w, err, "Failed to get vulnerability report", http.StatusInternalServerError)
+		return
+	}
 
-	// GDPR endpoints
-	mux.HandleFunc("/security/gdpr/assessment", securityHandler.PerformGDPRAssessment)
-	mux.HandleFunc("/security/gdpr/data-subject-request", securityHandler.ProcessDataSubjectRequest)
-	mux.HandleFunc("/security/gdpr/data-breach", securityHandler.RecordDataBreach)
+	WriteJSON(w, map[string]interface{}{
+		"success": true,
+		"data":    report,
+	}, http.StatusOK)
+}
 
-	// Responsible gaming endpoints
-	mux.HandleFunc("/security/responsible-gaming/assessment", securityHandler.PerformResponsibleGamingAssessment)
-	mux.HandleFunc("/security/responsible-gaming/self-exclusion", securityHandler.SetSelfExclusion)
-	mux.HandleFunc("/security/responsible-gaming/deposit-limit", securityHandler.SetDepositLimit)
-	mux.HandleFunc("/security/responsible-gaming/betting-limit", securityHandler.SetBettingLimit)
-	mux.HandleFunc("/security/responsible-gaming/time-limit", securityHandler.SetTimeLimit)
-	mux.HandleFunc("/security/responsible-gaming/intervention", securityHandler.TriggerIntervention)
-
-	// Dashboard endpoint
-	mux.HandleFunc("/security/dashboard", securityHandler.GetSecurityDashboard)
+// RegisterRoutes registers security routes
+func (h *SecurityHandler) RegisterRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/api/security/audit", h.PerformSecurityAudit)
+	mux.HandleFunc("/api/security/audit/history", h.GetSecurityAuditHistory)
+	mux.HandleFunc("/api/security/pentest", h.PerformPenetrationTest)
+	mux.HandleFunc("/api/security/pentest/results/", h.GetPenetrationTestResults)
+	mux.HandleFunc("/api/security/gdpr", h.ProcessGDPRRequest)
+	mux.HandleFunc("/api/security/gdpr/status/", h.GetGDPRRequestStatus)
+	mux.HandleFunc("/api/security/responsible-gaming", h.ProcessResponsibleGamingRequest)
+	mux.HandleFunc("/api/security/responsible-gaming/profile/", h.GetUserGamingProfile)
+	mux.HandleFunc("/api/security/responsible-gaming/limits", h.SetGamingLimits)
+	mux.HandleFunc("/api/security/metrics", h.GetSecurityMetrics)
+	mux.HandleFunc("/api/security/vulnerabilities", h.GetVulnerabilityReport)
 }
