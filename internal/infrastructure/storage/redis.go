@@ -42,7 +42,7 @@ func NewRedisCache(cfg RedisConfig) (*RedisCache, error) {
 }
 
 // Set stores a value in Redis with TTL
-func (r *RedisCache) Set(ctx context.Context, key string, value interface{}, ttl time.Duration) error {
+func (r *RedisCache) Set(ctx context.Context, key string, value any, ttl time.Duration) error {
 	data, err := json.Marshal(value)
 	if err != nil {
 		return fmt.Errorf("failed to marshal value: %w", err)
@@ -52,7 +52,7 @@ func (r *RedisCache) Set(ctx context.Context, key string, value interface{}, ttl
 }
 
 // Get retrieves a value from Redis
-func (r *RedisCache) Get(ctx context.Context, key string) (interface{}, error) {
+func (r *RedisCache) Get(ctx context.Context, key string) (any, error) {
 	data, err := r.client.Get(ctx, key).Result()
 	if err != nil {
 		if err == redis.Nil {
@@ -61,7 +61,7 @@ func (r *RedisCache) Get(ctx context.Context, key string) (interface{}, error) {
 		return nil, fmt.Errorf("failed to get key: %w", err)
 	}
 
-	var value interface{}
+	var value any
 	if err := json.Unmarshal([]byte(data), &value); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal value: %w", err)
 	}
@@ -96,7 +96,7 @@ func (r *RedisCache) Increment(ctx context.Context, key string) (int64, error) {
 }
 
 // SetWithExpiration sets a key with expiration in seconds
-func (r *RedisCache) SetWithExpiration(ctx context.Context, key string, value interface{}, expiration int) error {
+func (r *RedisCache) SetWithExpiration(ctx context.Context, key string, value any, expiration int) error {
 	data, err := json.Marshal(value)
 	if err != nil {
 		return fmt.Errorf("failed to marshal value: %w", err)

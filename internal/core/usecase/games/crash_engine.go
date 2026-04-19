@@ -34,7 +34,7 @@ type GameBetRepository interface {
 }
 
 type WebSocketHub interface {
-	BroadcastGameState(state interface{})
+	BroadcastGameState(state any)
 	GetActivePlayerCount(gameID uuid.UUID) int
 }
 
