@@ -2,75 +2,97 @@ package main
 
 import (
 	"context"
-	"log"
-	"net/http"
+	"fmt"
+	"log/slog"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
+	"github.com/betting-platform/internal/infrastructure/config"
+	"github.com/betting-platform/internal/infrastructure/database"
 	settlementhttp "github.com/betting-platform/internal/infrastructure/http"
+	"github.com/betting-platform/internal/infrastructure/http/health"
+	"github.com/betting-platform/internal/infrastructure/http/middleware"
+	"github.com/betting-platform/internal/infrastructure/logging"
+	"github.com/betting-platform/internal/infrastructure/metrics"
+	"github.com/betting-platform/internal/infrastructure/server"
 	"github.com/gorilla/mux"
 )
 
 func main() {
-	log.Println("Starting Settlement Service")
+	cfg, err := config.Load("settlement")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to load config: %v\n", err)
+		os.Exit(1)
+	}
+	logger := logging.Setup(cfg.Logging.Level, cfg.Logging.Format)
+	logger.Info("starting settlement", "env", cfg.Service.Environment)
 
-	// Initialize router
-	r := mux.NewRouter()
-
-	// Initialize handlers
-	handler := settlementhttp.NewSettlementHandler()
-
-	// Register routes
-	handler.RegisterRoutes(r)
-
-	// Start settlement processor in background
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go runSettlementProcessor(ctx)
+	// Initialize database
+	db, err := database.NewPostgresConnection(database.Config{
+		Host:            cfg.Database.Host,
+		Port:            cfg.Database.Port,
+		User:            cfg.Database.User,
+		Password:        cfg.Database.Password,
+		DBName:          cfg.Database.Name,
+		SSLMode:         cfg.Database.SSLMode,
+		MaxOpenConns:    cfg.Database.MaxOpenConns,
+		MaxIdleConns:    cfg.Database.MaxIdleConns,
+		ConnMaxLifetime: cfg.Database.ConnMaxLifetime,
+	})
+	if err != nil {
+		logger.Error("failed to connect to database", "error", err)
+		os.Exit(1)
+	}
+	defer db.Close()
 
-	// Start server
-	port := os.Getenv("SETTLEMENT_PORT")
-	if port == "" {
-		port = "8083"
+	// Initialize MaxMind provider (optional)
+	geoProvider, err := middleware.NewMaxMindProvider(middleware.DefaultDBPath())
+	if err != nil {
+		logger.Warn("failed to load maxmind database", "error", err)
 	}
 
-	srv := &http.Server{
-		Addr:         ":" + port,
-		Handler:      r,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
+	r := mux.NewRouter()
+
+	// Initialize metrics
+	rec := metrics.New("settlement")
+	rec.RegisterRoutes(r)
+
+	// Apply middleware stack
+	r.Use(middleware.RequestID)
+	r.Use(middleware.Recovery)
+	r.Use(middleware.Logging)
+	r.Use(middleware.CORS(cfg.Security))
+	r.Use(rec.Middleware)
+	r.Use(middleware.Geolocation(middleware.GeoConfig{
+		Provider: geoProvider,
+		Allowed:  cfg.Tenant.AllowedCountries,
+	}))
+
+	rl := middleware.NewRateLimiter(ctx, cfg.Security.RateLimitRequests, cfg.Security.RateLimitWindow)
+	r.Use(rl.Middleware)
+
+	// Health checks
+	h := health.NewHandler("settlement", "dev")
+	h.Register(&health.PostgresChecker{DB: db})
+	h.RegisterRoutes(r)
+
+	// Settlement handlers
+	settlementhttp.NewSettlementHandler().RegisterRoutes(r)
+
+	go runSettlementProcessor(ctx, logger)
+
+	addr := fmt.Sprintf(":%d", cfg.Service.Port)
+	if err := server.RunHTTP(ctx, addr, r, logger); err != nil {
+		logger.Error("server terminated with error", "error", err)
+		os.Exit(1)
 	}
-
-	go func() {
-		log.Printf("Settlement Service listening on port %s", port)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server error: %v", err)
-		}
-	}()
-
-	// Wait for interrupt signal
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-
-	log.Println("Shutting down Settlement Service...")
-
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer shutdownCancel()
-
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		log.Fatalf("Server forced to shutdown: %v", err)
-	}
-
-	cancel()
-
-	log.Println("Settlement Service exited cleanly")
 }
 
-func runSettlementProcessor(ctx context.Context) {
+// runSettlementProcessor runs the bet settlement loop. It exits when ctx is cancelled.
+func runSettlementProcessor(ctx context.Context, logger *slog.Logger) {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
@@ -79,17 +101,8 @@ func runSettlementProcessor(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			// Process pending settlements
-			log.Println("Checking for bets to settle...")
-
-			// In production:
-			// 1. Query pending bets
-			// 2. Check match results from odds provider
-			// 3. Calculate winnings
-			// 4. Update bet status
-			// 5. Credit winners' wallets
-			// 6. Deduct taxes
-			// 7. Publish settlement event
+			// TODO: query pending bets, match results, settle, credit wallets, apply tax.
+			logger.Debug("settlement tick")
 		}
 	}
 }
