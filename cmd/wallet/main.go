@@ -2,62 +2,100 @@ package main
 
 import (
 	"context"
-	"log"
-	"net/http"
+	"fmt"
 	"os"
-	"os/signal"
-	"syscall"
-	"time"
 
+	"github.com/betting-platform/internal/infrastructure/config"
+	"github.com/betting-platform/internal/infrastructure/database"
 	wallethttp "github.com/betting-platform/internal/infrastructure/http"
+	"github.com/betting-platform/internal/infrastructure/http/health"
+	"github.com/betting-platform/internal/infrastructure/http/middleware"
+	"github.com/betting-platform/internal/infrastructure/logging"
+	"github.com/betting-platform/internal/infrastructure/metrics"
+	"github.com/betting-platform/internal/infrastructure/server"
+	"github.com/betting-platform/internal/infrastructure/tracing"
 	"github.com/gorilla/mux"
 )
 
 func main() {
-	log.Println("Starting Wallet Service")
-
-	// Initialize router
-	r := mux.NewRouter()
-
-	// Initialize handlers
-	handler := wallethttp.NewWalletHandler()
-
-	// Register routes
-	handler.RegisterRoutes(r)
-
-	// Start server
-	port := os.Getenv("WALLET_PORT")
-	if port == "" {
-		port = "8081"
+	cfg, err := config.Load("wallet")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to load config: %v\n", err)
+		os.Exit(1)
 	}
+	logger := logging.Setup(cfg.Logging.Level, cfg.Logging.Format)
+	logger.Info("starting wallet", "env", cfg.Service.Environment)
 
-	srv := &http.Server{
-		Addr:         ":" + port,
-		Handler:      r,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
-	}
-
-	go func() {
-		log.Printf("Wallet Service listening on port %s", port)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server error: %v", err)
-		}
-	}()
-
-	// Graceful shutdown
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-
-	log.Println("Shutting down Wallet Service...")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	if err := srv.Shutdown(ctx); err != nil {
-		log.Fatalf("Server forced to shutdown: %v", err)
+	// Initialize OpenTelemetry tracing
+	tracerCfg := tracing.DefaultConfig("wallet")
+	cleanup, err := tracing.InitTracer(ctx, tracerCfg)
+	if err != nil {
+		logger.Error("failed to initialize tracer", "error", err)
+		os.Exit(1)
+	}
+	defer cleanup()
+
+	// Initialize database
+	db, err := database.NewPostgresConnection(database.Config{
+		Host:            cfg.Database.Host,
+		Port:            cfg.Database.Port,
+		User:            cfg.Database.User,
+		Password:        cfg.Database.Password,
+		DBName:          cfg.Database.Name,
+		SSLMode:         cfg.Database.SSLMode,
+		MaxOpenConns:    cfg.Database.MaxOpenConns,
+		MaxIdleConns:    cfg.Database.MaxIdleConns,
+		ConnMaxLifetime: cfg.Database.ConnMaxLifetime,
+	})
+	if err != nil {
+		logger.Error("failed to connect to database", "error", err)
+		os.Exit(1)
+	}
+	defer db.Close()
+
+	// Services will be initialized when wallet handler is updated
+
+	// Initialize MaxMind provider (optional)
+	geoProvider, err := middleware.NewMaxMindProvider(middleware.DefaultDBPath())
+	if err != nil {
+		logger.Warn("failed to load maxmind database", "error", err)
 	}
 
-	log.Println("Wallet Service exited cleanly")
+	r := mux.NewRouter()
+
+	// Initialize metrics
+	rec := metrics.New("wallet")
+	rec.RegisterRoutes(r)
+
+	// Apply middleware stack
+	r.Use(tracing.HTTPMiddleware("wallet"))
+	r.Use(middleware.RequestID)
+	r.Use(middleware.Recovery)
+	r.Use(middleware.Logging)
+	r.Use(middleware.CORS(cfg.Security))
+	r.Use(rec.Middleware)
+	r.Use(middleware.Geolocation(middleware.GeoConfig{
+		Provider: geoProvider,
+		Allowed:  cfg.Tenant.AllowedCountries,
+	}))
+
+	rl := middleware.NewRateLimiter(ctx, cfg.Security.RateLimitRequests, cfg.Security.RateLimitWindow)
+	r.Use(rl.Middleware)
+
+	// Health checks
+	h := health.NewHandler("wallet", "dev")
+	h.Register(&health.PostgresChecker{DB: db})
+	h.RegisterRoutes(r)
+
+	// Wallet handlers
+	wallethttp.NewWalletHandler().RegisterRoutes(r)
+
+	addr := fmt.Sprintf(":%d", cfg.Service.Port)
+	if err := server.RunHTTP(ctx, addr, r, logger); err != nil {
+		logger.Error("server terminated with error", "error", err)
+		os.Exit(1)
+	}
 }
