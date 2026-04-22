@@ -3,12 +3,14 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/betting-platform/internal/core/domain"
 	"github.com/google/uuid"
+	_ "github.com/lib/pq"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -720,8 +722,94 @@ func TestVersionIncrement(t *testing.T) {
 
 // setupTestDB creates a test database connection
 func setupTestDB(t *testing.T) *sql.DB {
-	// In a real implementation, this would create a test database
-	// For now, we'll use a mock or skip the test if no test DB is available
-	t.Skip("Test database not configured - implement test DB setup")
+	// Try to connect to test database
+	db, err := sql.Open("postgres", "postgres://test:test@localhost:5432/betting_test?sslmode=disable")
+	if err != nil {
+		t.Skipf("Could not connect to test database: %v", err)
+		return nil
+	}
+
+	// Test the connection
+	if err := db.Ping(); err != nil {
+		t.Skipf("Could not ping test database: %v", err)
+		db.Close()
+		return nil
+	}
+
+	// Create test tables if they don't exist
+	if err := createTestTables(db); err != nil {
+		t.Fatalf("Could not create test tables: %v", err)
+		db.Close()
+		return nil
+	}
+
+	return db
+}
+
+// createTestTables creates the necessary tables for testing
+func createTestTables(db *sql.DB) error {
+	// Create wallets table
+	walletsTable := `
+	CREATE TABLE IF NOT EXISTS wallets (
+		id UUID PRIMARY KEY,
+		user_id UUID UNIQUE NOT NULL,
+		currency VARCHAR(10) NOT NULL,
+		balance DECIMAL(20,8) NOT NULL DEFAULT 0,
+		version BIGINT NOT NULL DEFAULT 1,
+		bonus_balance DECIMAL(20,8) NOT NULL DEFAULT 0,
+		today_deposit DECIMAL(20,8) NOT NULL DEFAULT 0,
+		last_deposit_reset TIMESTAMP NOT NULL DEFAULT NOW(),
+		updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+	)`
+
+	if _, err := db.Exec(walletsTable); err != nil {
+		return fmt.Errorf("failed to create wallets table: %w", err)
+	}
+
+	// Create transactions table
+	transactionsTable := `
+	CREATE TABLE IF NOT EXISTS transactions (
+		id UUID PRIMARY KEY,
+		wallet_id UUID NOT NULL,
+		user_id UUID NOT NULL,
+		type VARCHAR(50) NOT NULL,
+		amount DECIMAL(20,8) NOT NULL,
+		currency VARCHAR(10) NOT NULL,
+		balance_before DECIMAL(20,8) NOT NULL,
+		balance_after DECIMAL(20,8) NOT NULL,
+		reference_id UUID,
+		reference_type VARCHAR(50),
+		provider_txn_id VARCHAR(255),
+		provider_name VARCHAR(100),
+		status VARCHAR(50) NOT NULL,
+		description TEXT,
+		created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+		completed_at TIMESTAMP,
+		country_code VARCHAR(10)
+	)`
+
+	if _, err := db.Exec(transactionsTable); err != nil {
+		return fmt.Errorf("failed to create transactions table: %w", err)
+	}
+
+	// Clean up any existing test data
+	if err := cleanupTestData(db); err != nil {
+		return fmt.Errorf("failed to cleanup test data: %w", err)
+	}
+
+	return nil
+}
+
+// cleanupTestData removes test data from tables
+func cleanupTestData(db *sql.DB) error {
+	// Delete test data (transactions first due to foreign key constraints)
+	if _, err := db.Exec("DELETE FROM transactions WHERE user_id LIKE 'test-%'"); err != nil {
+		return fmt.Errorf("failed to cleanup test transactions: %w", err)
+	}
+
+	if _, err := db.Exec("DELETE FROM wallets WHERE user_id LIKE 'test-%'"); err != nil {
+		return fmt.Errorf("failed to cleanup test wallets: %w", err)
+	}
+
 	return nil
 }
