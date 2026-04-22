@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"runtime/debug"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/betting-platform/internal/infrastructure/auth"
@@ -107,78 +106,6 @@ func CORS(cfg config.SecurityConfig) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
-}
-
-// RateLimiter is a simple in-memory token bucket per client IP.
-type RateLimiter struct {
-	mu      sync.Mutex
-	buckets map[string]*bucket
-	limit   int
-	window  time.Duration
-}
-
-type bucket struct {
-	count   int
-	resetAt time.Time
-}
-
-// NewRateLimiter creates a new rate limiter. The cleanup goroutine exits when
-// ctx is cancelled, preventing a leaked goroutine at shutdown.
-func NewRateLimiter(ctx context.Context, limit int, window time.Duration) *RateLimiter {
-	rl := &RateLimiter{
-		buckets: make(map[string]*bucket),
-		limit:   limit,
-		window:  window,
-	}
-	go rl.cleanup(ctx)
-	return rl
-}
-
-func (rl *RateLimiter) cleanup(ctx context.Context) {
-	ticker := time.NewTicker(rl.window)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			rl.mu.Lock()
-			now := time.Now()
-			for k, b := range rl.buckets {
-				if now.After(b.resetAt) {
-					delete(rl.buckets, k)
-				}
-			}
-			rl.mu.Unlock()
-		}
-	}
-}
-
-// Middleware returns the rate limiting handler.
-func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		key := clientIP(r)
-		rl.mu.Lock()
-		b, ok := rl.buckets[key]
-		now := time.Now()
-		if !ok || now.After(b.resetAt) {
-			b = &bucket{count: 0, resetAt: now.Add(rl.window)}
-			rl.buckets[key] = b
-		}
-		b.count++
-		count := b.count
-		resetAt := b.resetAt
-		rl.mu.Unlock()
-
-		if count > rl.limit {
-			w.Header().Set("Retry-After", resetAt.Sub(now).String())
-			writeJSON(w, http.StatusTooManyRequests, map[string]string{
-				"error": "rate limit exceeded",
-			})
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
 }
 
 func clientIP(r *http.Request) string {

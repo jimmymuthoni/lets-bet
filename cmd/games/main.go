@@ -17,11 +17,25 @@ import (
 	"github.com/betting-platform/internal/infrastructure/http/middleware"
 	"github.com/betting-platform/internal/infrastructure/logging"
 	"github.com/betting-platform/internal/infrastructure/metrics"
+	"github.com/betting-platform/internal/infrastructure/ratelimit"
 	"github.com/betting-platform/internal/infrastructure/repository/postgres"
 	"github.com/betting-platform/internal/infrastructure/server"
 	"github.com/betting-platform/internal/infrastructure/websocket"
 	"github.com/gorilla/mux"
 )
+
+// redisRateLimiterChecker implements health.Checker for Redis rate limiter
+type redisRateLimiterChecker struct {
+	limiter *ratelimit.RedisLimiter
+}
+
+func (r *redisRateLimiterChecker) Name() string {
+	return "redis_rate_limiter"
+}
+
+func (r *redisRateLimiterChecker) Check(ctx context.Context) error {
+	return r.limiter.HealthCheck(ctx)
+}
 
 func main() {
 	cfg, err := config.LoadConfig()
@@ -102,11 +116,39 @@ func main() {
 		Allowed:  cfg.Tenant.AllowedCountries,
 	}))
 
-	rl := middleware.NewRateLimiter(ctx, cfg.Security.RateLimitRequests, cfg.Security.RateLimitWindow)
-	r.Use(rl.Middleware)
+	// Use Redis-backed rate limiter to prevent memory leak DDoS vulnerability
+	rateLimitConfig := &ratelimit.Config{
+		IPRequestsPerWindow:     cfg.Security.RateLimitRequests,
+		IPWindow:                cfg.Security.RateLimitWindow,
+		UserRequestsPerWindow:   cfg.Security.RateLimitRequests * 2, // Allow more for authenticated users
+		UserWindow:              cfg.Security.RateLimitWindow,
+		GlobalRequestsPerWindow: cfg.Security.RateLimitRequests * 10, // Global limit
+		GlobalWindow:            cfg.Security.RateLimitWindow,
+		RedisAddr:               cfg.Redis.Addr(),
+		RedisPassword:           cfg.Redis.Password,
+		RedisDB:                 0,
+		UserPrefix:              "rate_limit:games:user:",
+		IPPrefix:                "rate_limit:games:ip:",
+		GlobalPrefix:            "rate_limit:games:global:",
+	}
+
+	// Use existing Redis rate limiter directly
+	redisRateLimiter, err := ratelimit.NewRedisLimiter(ctx, rateLimitConfig)
+	if err != nil {
+		logger.Error("failed to create Redis rate limiter", "error", err)
+		os.Exit(1)
+	}
+	defer redisRateLimiter.Close()
+
+	// Apply rate limiting middleware
+	r.Use(middleware.RateLimitMiddleware(redisRateLimiter, rateLimitConfig))
 
 	h := health.NewHandler("games", "dev")
 	h.Register(&health.PostgresChecker{DB: db})
+
+	// Register Redis rate limiter health check
+	h.Register(&redisRateLimiterChecker{limiter: redisRateLimiter})
+
 	h.RegisterRoutes(r)
 
 	gameshttp.NewGamesHandler(engine).RegisterRoutes(r)

@@ -14,6 +14,7 @@ import (
 	"github.com/betting-platform/internal/infrastructure/http/middleware"
 	"github.com/betting-platform/internal/infrastructure/logging"
 	"github.com/betting-platform/internal/infrastructure/metrics"
+	"github.com/betting-platform/internal/infrastructure/ratelimit"
 	"github.com/betting-platform/internal/infrastructure/server"
 	"github.com/gorilla/mux"
 )
@@ -71,8 +72,32 @@ func main() {
 		Allowed:  cfg.Tenant.AllowedCountries,
 	}))
 
-	rl := middleware.NewRateLimiter(ctx, cfg.Security.RateLimitRequests, cfg.Security.RateLimitWindow)
-	r.Use(rl.Middleware)
+	// Use Redis-backed rate limiter to prevent memory leak DDoS vulnerability
+	rateLimitConfig := &ratelimit.Config{
+		IPRequestsPerWindow:     cfg.Security.RateLimitRequests,
+		IPWindow:                cfg.Security.RateLimitWindow,
+		UserRequestsPerWindow:   cfg.Security.RateLimitRequests * 2, // Allow more for authenticated users
+		UserWindow:              cfg.Security.RateLimitWindow,
+		GlobalRequestsPerWindow: cfg.Security.RateLimitRequests * 10, // Global limit
+		GlobalWindow:            cfg.Security.RateLimitWindow,
+		RedisAddr:               cfg.Redis.Addr(),
+		RedisPassword:           cfg.Redis.Password,
+		RedisDB:                 0,
+		UserPrefix:              "rate_limit:settlement:user:",
+		IPPrefix:                "rate_limit:settlement:ip:",
+		GlobalPrefix:            "rate_limit:settlement:global:",
+	}
+
+	// Use existing Redis rate limiter directly
+	redisRateLimiter, err := ratelimit.NewRedisLimiter(ctx, rateLimitConfig)
+	if err != nil {
+		logger.Error("failed to create Redis rate limiter", "error", err)
+		os.Exit(1)
+	}
+	defer redisRateLimiter.Close()
+
+	// Apply rate limiting middleware
+	r.Use(middleware.RateLimitMiddleware(redisRateLimiter, rateLimitConfig))
 
 	// Health checks
 	h := health.NewHandler("settlement", "dev")
