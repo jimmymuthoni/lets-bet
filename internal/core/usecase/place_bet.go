@@ -93,7 +93,10 @@ func (uc *PlaceBetUseCase) Execute(ctx context.Context, in PlaceBetInput) (*doma
 	}
 
 	// 3. Apply stake tax (collected up front).
-	stakeBreak := uc.tax.ApplyStakeTax(in.CountryCode, in.Stake)
+	stakeBreak, err := uc.tax.ApplyStakeTax(in.CountryCode, in.Stake)
+	if err != nil {
+		return nil, fmt.Errorf("apply stake tax: %w", err)
+	}
 
 	// 4. Compute odds and potential win from the post-tax net stake, so the
 	// advertised odds apply to the actual money at risk.

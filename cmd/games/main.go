@@ -62,7 +62,11 @@ func main() {
 
 	// Initialize wallet service and tax engine
 	walletService := wallet.New(db)
-	taxEngine := tax.Default()
+	taxEngine, err := tax.Default()
+	if err != nil {
+		logger.Error("failed to create tax engine", "error", err)
+		os.Exit(1)
+	}
 
 	// Initialize event bus
 	eventBus, err := events.Connect(cfg.NATS.URL, "games-service")

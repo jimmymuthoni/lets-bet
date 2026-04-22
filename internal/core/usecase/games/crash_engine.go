@@ -184,7 +184,10 @@ func (e *CrashGameEngine) Cashout(ctx context.Context, req *CashoutRequest) (*Ca
 	payout := bet.Amount.Mul(currentOdds)
 
 	// Calculate tax
-	payoutBreakdown := e.taxEngine.ApplyPayoutTax("KE", payout, bet.Amount)
+	payoutBreakdown, err := e.taxEngine.ApplyPayoutTax("KE", payout, bet.Amount)
+	if err != nil {
+		return nil, fmt.Errorf("calculate payout tax: %w", err)
+	}
 	netPayout := payoutBreakdown.NetPayout
 
 	// Update bet
@@ -320,7 +323,11 @@ func (e *CrashGameEngine) checkAutoCashouts(ctx context.Context, currentOdds dec
 		if bet.CashoutAt != nil && currentOdds.GreaterThanOrEqual(*bet.CashoutAt) {
 			// Auto cashout
 			payout := bet.Amount.Mul(*bet.CashoutAt)
-			payoutBreakdown := e.taxEngine.ApplyPayoutTax("KE", payout, bet.Amount)
+			payoutBreakdown, err := e.taxEngine.ApplyPayoutTax("KE", payout, bet.Amount)
+			if err != nil {
+				log.Printf("failed to calculate payout tax for bet %s: %v", bet.ID, err)
+				continue
+			}
 			netPayout := payoutBreakdown.NetPayout
 
 			if err := e.betRepo.UpdateCashout(ctx, bet.ID, *bet.CashoutAt, netPayout); err != nil {
