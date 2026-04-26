@@ -545,18 +545,16 @@ func (e *CrashGameEngine) checkAutoCashouts(ctx context.Context, currentOdds dec
 			}
 			netPayout := payoutBreakdown.NetPayout
 
-			if err := e.betRepo.UpdateCashout(ctx, bet.ID, *bet.CashoutAt, netPayout); err != nil {
-				log.Printf("Failed to update auto cashout bet: %v", err)
+			// Use atomic transaction to prevent fund loss bug
+			// This wraps bet update and wallet credit in a single database transaction
+			success, err := e.betRepo.AtomicAutoCashoutWithCredit(ctx, bet.ID, bet.UserID, *bet.CashoutAt, netPayout, "KE")
+			if err != nil {
+				log.Printf("Failed to process auto cashout for bet %s: %v", bet.ID, err)
 				continue
 			}
-
-			movement := wallet.Movement{
-				UserID: bet.UserID,
-				Amount: netPayout,
-				Type:   domain.TransactionTypeBetWon,
-			}
-			if _, err := e.walletService.Credit(ctx, bet.UserID, netPayout, movement); err != nil {
-				log.Printf("Failed to add auto cashout payout: %v", err)
+			if !success {
+				log.Printf("Auto cashout skipped for bet %s (already processed)", bet.ID)
+				continue
 			}
 		}
 	}
